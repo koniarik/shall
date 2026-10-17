@@ -1,0 +1,218 @@
+---
+title: Serve
+requirements:
+  - id: R25
+    title: Serves The Sets Under A Directory
+    text: When started, the server SHALL serve every set whose manifest lies under the given
+      directory, the current one by default.
+    rationale: The sets a reader browses are then the ones the checker checks.
+    serves: [N13]
+    status: approved
+    children:
+      - id: R25.1
+        title: Address From The Command Line
+        text: Where its command line gives an address and port, the server SHALL listen on them.
+        status: approved
+      - id: R25.2
+        title: Local By Default
+        text: Where its command line gives no address, the server SHALL accept connections only
+          from the machine it runs on.
+        rationale: Serving a repository to the network is then a choice someone makes, not a
+          default they inherit.
+        status: approved
+        children:
+          - id: R25.2.1
+            title: Local Means Local
+            text: While it accepts connections only from the machine it runs on, the server SHALL
+              refuse every request whose Host header names neither localhost nor a loopback
+              address.
+            rationale: A web page in the reader's browser could otherwise reach the server through
+              a domain it controls, by DNS rebinding. A server given a network address can be
+              reached from that network anyway, so the check would add nothing there.
+            serves: [R7]
+            status: approved
+      - id: R25.3
+        title: Says Where It Serves
+        text: When started, the server SHALL print the address it serves on.
+        status: approved
+      - id: R25.4
+        title: Sets Listed
+        text: The server SHALL list the sets it serves by name on its start page, each as a link
+          to its document.
+        status: approved
+      - id: R25.5
+        title: Clashing Names
+        text: If two sets it serves share a name, then the server SHALL list that name with an
+          error naming both manifests, and serve neither under it.
+        rationale: Keeping set names unique is up to the sets' authors. The server cannot tell
+          which of the two an address means, so it points out the clash.
+        status: approved
+  - id: R26
+    title: One Document Per Set
+    text: The server SHALL show each set as one document, its mission file first and then its
+      chapters, each item in the order its file holds it and each child under its parent.
+    serves: [N13]
+    status: approved
+    children:
+      - id: R26.1
+        title: Statements Shown
+        text: The server SHALL show each item of the mission file and of an unfolded chapter with
+          its id, title and text.
+        status: approved
+      - id: R26.2
+        title: Views Are Links
+        text: The server SHALL keep each choice the reader makes about the view in the page
+          address, so that opening the address again shows the same view.
+        rationale: A link then opens the view its sender saw.
+        status: approved
+      - id: R26.3
+        title: Statuses Shown
+        text: The server SHALL show the status of each need and the effective status of each
+          requirement, with a requirement's written status beside it where the two differ.
+        status: approved
+      - id: R26.4
+        title: Chapters Folded
+        text: The server SHALL show each chapter folded, as its title and the number of its items
+          and findings, until it is unfolded.
+        rationale: A set of thousands of requirements then opens as quickly as a small one, and
+          the folded document doubles as its outline.
+        status: approved
+      - id: R26.5
+        title: Loaded When Unfolded
+        text: While a chapter is folded, the server SHALL send none of its items to the page,
+          except in a preview or a backlink.
+        status: approved
+      - id: R26.6
+        title: Unfolded To Reach An Item
+        text: When a link, an item's address or a jump leads to an item in a folded chapter, the
+          server SHALL unfold that chapter.
+        status: approved
+      - id: R26.7
+        title: A Set's Address
+        text: The server SHALL give each set's document an address made of the set's name.
+        rationale: Ids are unique only within a set, so every address names the set it belongs
+          to.
+        status: approved
+      - id: R26.8
+        title: Broken Files In Place
+        text: If a file of a set cannot be read or parsed as YAML, then the server SHALL show the
+          rest of the set, with that file in its place as its file name and its findings.
+        rationale: The page shows what is on disk, even halfway through an edit, and the rest of
+          the set stays readable. Showing the last version that parsed was not taken because the
+          page would then show what no file holds.
+        serves: [N13, N14]
+        status: approved
+      - id: R26.9
+        title: Chapters In Path Order
+        text: The server SHALL show a set's chapters in the order of their file paths.
+        rationale: Authors then choose the order by how they name the files, with no list to keep
+          in step with them.
+        status: approved
+      - id: R26.10
+        title: Mission First
+        text: The server SHALL show a set's mission statement and ranking before its items.
+        status: approved
+  - id: R27
+    title: Ids Are Links
+    text: The server SHALL show every id that a field names, and that names an item the server
+      serves, as a link to that item.
+    serves: [N13]
+    status: approved
+    children:
+      - id: R27.1
+        title: Preview On Hover Or Focus
+        text: When the reader points at a link to an item or moves keyboard focus to it, the
+          server SHALL show that item's title and text beside it.
+        rationale: Previews let a reader follow a reference without losing their place.
+        status: approved
+      - id: R27.2
+        title: Backlinks In Short
+        text: The server SHALL show on each item the ids of the items that name it, grouped by the
+          field that names them.
+        status: approved
+        children:
+          - id: R27.2.1
+            title: Backlinks Unfolded
+            text: When the reader unfolds an item's backlinks, the server SHALL show each item that
+              names it with its title and text.
+            rationale: Full backlinks on every item would bury the document, so they are loaded
+              only when a reader asks for them.
+            status: approved
+      - id: R27.3
+        title: Every Item Has An Address
+        text: The server SHALL give each item an address, made of its set's address and its id,
+          that opens the document at that item.
+        status: approved
+      - id: R27.4
+        title: Unknown Ids As Text
+        text: If a field names an id that is neither an item nor retired in a set the server
+          serves, then the server SHALL show that id as plain text.
+        rationale: A link must lead somewhere. The checker's finding on the item says what is
+          wrong.
+        status: approved
+      - id: R27.5
+        title: Retired Ids Marked
+        text: If a field names a retired id, then the server SHALL show that id as plain text,
+          marked retired, with the title it was retired under.
+        status: approved
+  - id: R28
+    title: Jump To An Id
+    text: When the reader enters an id, the server SHALL show the document at that item, in the
+      current set unless the id names another set.
+    serves: [N13]
+    status: approved
+    children:
+      - id: R28.1
+        title: Jump To No Item
+        text: If the reader enters an id that is neither an item nor retired in a set the server
+          serves, then the server SHALL keep the document where it is and say that no item has
+          that id.
+        status: approved
+      - id: R28.2
+        title: Jump To A Retired Id
+        text: If the reader enters a retired id, then the server SHALL keep the document where it
+          is and say the file and line where the id was retired.
+        status: approved
+  - id: R29
+    title: Follows The Files
+    text: When a set's file changes on disk, the server SHALL show the set as its files then
+      stand within two seconds, without the reader reloading the page.
+    rationale: An author edits in their editor and reads in the browser, and the two stay in
+      step.
+    serves: [N14]
+    status: approved
+    children:
+      - id: R29.1
+        title: Any Number Of Tabs
+        text: The server SHALL keep each visible page following the files, however many tabs are
+          open.
+        rationale: Browsers open only six connections to one server over plain HTTP, and each
+          page following the files holds one open.
+        status: approved
+      - id: R29.2
+        title: Place Kept
+        text: When a page follows a change, the server SHALL keep the item at the top of the
+          screen there, or the item after it if that one was removed.
+        rationale: A reader keeps their place while an author saves beside them.
+        status: approved
+  - id: R30
+    title: Findings In Place
+    text: The server SHALL show each finding that shall check reports for the set on the item it
+      concerns, with its severity.
+    rationale: The page and the checker then cannot disagree.
+    serves: [N13, N14]
+    status: approved
+    children:
+      - id: R30.1
+        title: Findings Without An Item
+        text: The server SHALL show each finding that concerns no item at the top of the
+          document.
+        status: approved
+  - id: R33
+    title: Only What It Builds
+    text: The server SHALL send only the pages it builds and the files embedded in its binary,
+      never a file that a request names.
+    rationale: A request then chooses among the files of the sets the server has read and
+      reaches no other, however its path is written, without the server having to check paths.
+    serves: [R7]
+    status: approved

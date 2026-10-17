@@ -140,3 +140,15 @@ needs:
       style.
     serves: [mission]
     status: hypothesis
+  - id: N13
+    title: Read As A Document
+    stakeholder: S2
+    text: Read a set as a document, and reach any item it names in one step.
+    serves: [O2]
+    status: hypothesis
+  - id: N14
+    title: See It As I Write
+    stakeholder: S1
+    text: See what I write as readers will see it, while I write it.
+    serves: [O2]
+    status: hypothesis

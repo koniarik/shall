@@ -111,3 +111,59 @@ requirements:
         title: Clean Under go vet
         text: The tool's source SHALL pass go vet without findings.
         status: implemented
+  - id: R31
+    title: Pages From Templates
+    text: The server SHALL build each page, and each part it later sends into a page, as HTML
+      with the html/template package of Go's standard library.
+    rationale: Reading, checking and laying out a set then happen in Go, beside the checker's
+      code and tests, and the browser only shows the result. A TypeScript application was not
+      taken because it would bring Node.js back into development and add a build.
+    serves: [R19]
+    verify: inspection
+    status: approved
+    children:
+      - id: R31.1
+        title: Thin Pages
+        text: The page's JavaScript SHALL only fetch parts of the page from the server, put them
+          in place and record the view in the page address.
+        rationale: Every decision about a set stays on the server, where the command line can
+          offer the same queries. htmx, which works the same way, was not taken because a few
+          dozen lines of script cover these interactions without a dependency.
+        status: approved
+      - id: R31.2
+        title: Script As Written
+        text: The page's JavaScript SHALL be served as written, with no library and no build step.
+        status: approved
+  - id: R32
+    title: Changes Polled And Pushed
+    text: The server SHALL tell open pages about changed files over server-sent events.
+    rationale: Server-sent events come with Go's standard library and every browser. WebSockets
+      were not taken because the page never needs to talk back.
+    serves: [R29]
+    verify: inspection
+    status: approved
+    children:
+      - id: R32.1
+        title: Hidden Pages Let Go
+        text: While a page is hidden, the page's JavaScript SHALL keep its stream of changes
+          closed, catching up when the page is shown again.
+        rationale: Only the pages a reader can see then hold a connection, which keeps them under
+          the browser's limit. One stream shared across tabs through a shared worker was not taken
+          for the code it adds to the page.
+        serves: [R29.1]
+        status: approved
+      - id: R32.2
+        title: Polled Once A Second
+        text: The server SHALL look for changed files about once a second, comparing each file's
+          modification time and size, and the contents of any file modified in the last two
+          seconds.
+        rationale: A walk per second costs little even for thousands of files. Comparing contents
+          catches a save that keeps a file's size within one second, on file systems that record
+          times only to the second. fsnotify was not taken for being a dependency with platform
+          quirks, such as editors that save by replacing a file.
+        status: approved
+      - id: R32.3
+        title: Files That Come And Go
+        text: The server SHALL count a set's file or a manifest that appears or vanishes under
+          the served directory as a change.
+        status: approved

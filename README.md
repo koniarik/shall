@@ -1,0 +1,112 @@
+# shall
+
+shall keeps a product's mission, needs and requirements as reviewed text in
+git, so that people and agents can check them, browse them and discuss changes
+to them in one place.
+
+A set of requirements is plain YAML next to the code: why the product exists,
+who it serves and what they need, and the requirements that answer those
+needs, each with a stable id. `shall check` verifies that a set follows the
+format, the way a compiler or a linter verifies code, and runs as a
+pre-commit hook.
+
+The format is defined in [doc/format.md](doc/format.md), with the shape of
+each file also given as JSON Schema in [schema/format-1/](schema/format-1/).
+
+## Running it on this repository
+
+This repository is itself a set: [shall.yaml](shall.yaml) at the root points
+to shall's own mission and requirements in `doc/requirements/`. With Go 1.27
+or newer, from the root of a checkout:
+
+```bash
+go run ./cmd/shall check
+```
+
+```text
+doc/requirements/baseline.shall.yaml:4: warning: R7 serves: the requirement serves nothing
+doc/requirements/baseline.shall.yaml:12: warning: R8 serves: the requirement serves nothing
+…
+0 errors, 12 warnings
+```
+
+Each finding names the file, line, item and field it concerns. Warnings do
+not fail the run; errors do. The twelve warnings are real: the baseline
+requirements serve no need yet.
+
+To install the binary instead, which puts `shall` in `$(go env GOPATH)/bin`:
+
+```bash
+go install ./cmd/shall
+```
+
+## Usage
+
+```text
+shall check [-json] [-warnings-as-errors] [directory]
+```
+
+`shall check` checks every set whose manifest, a file named `shall.yaml`, lies
+under the directory, the current one by default.
+
+| Option | Effect |
+|---|---|
+| `-json` | prints the findings as one JSON document, for scripts and agents |
+| `-warnings-as-errors` | fails the run on warnings too |
+
+The exit status is 0 when nothing failed, 1 when the check found errors, and
+2 when the command was used wrongly.
+
+## As a pre-commit hook
+
+In the `.pre-commit-config.yaml` of the repository holding the set:
+
+```yaml
+repos:
+  - repo: https://github.com/koniarik/shall
+    rev: <tag or commit>
+    hooks:
+      - id: shall-check
+```
+
+pre-commit builds the hook from source and fetches Go when the machine has
+none.
+
+## A minimal set
+
+```yaml
+# shall.yaml
+name: coffee
+format: 1
+path: requirements
+```
+
+```yaml
+# requirements/mission.shall.yaml
+mission: Coffee in the office without anyone looking after the machine.
+stakeholders:
+  - id: S1
+    title: Office User
+    text: Wants coffee without having to look after the machine.
+needs:
+  - id: N1
+    title: Know Before Brewing
+    stakeholder: S1
+    text: Know before I brew that the tank needs water.
+    serves: [mission]
+    status: hypothesis
+```
+
+```yaml
+# requirements/tank.shall.yaml
+title: Water Tank
+requirements:
+  - id: R1
+    title: Refill Lamp
+    text: When the tank becomes empty, the machine SHALL light the refill lamp.
+    serves: [N1]
+    status: approved
+```
+
+[doc/format.md](doc/format.md) explains every kind of item and field, with a
+good and a bad example of each.
