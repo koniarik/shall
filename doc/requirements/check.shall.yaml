@@ -6,7 +6,7 @@ requirements:
     text: When the checker runs, the checker SHALL check every set whose manifest, a file named
       shall.yaml, lies under the given directory, the current one by default.
     serves: [N5, N11]
-    status: approved
+    status: implemented
   - id: R2
     title: The Format Is Enforced
     text: The checker SHALL report each breach of the format that a set's files show, as a warning
@@ -15,13 +15,16 @@ requirements:
       rather than to a copy of its rules here.
     serves: [N5, N6]
     status: approved
+    notes:
+      - The rules within one set are implemented; the rules that read another set, such as
+        mirrors and name/id references, are not.
     children:
       - id: R2.1
         title: Unknown Formats Are Refused
         text: If a manifest names a format version the checker does not read, then the checker
           SHALL report an error naming that version.
         serves: [N7]
-        status: approved
+        status: implemented
       - id: R2.2
         title: Checking Goes On Past Errors
         text: When the checker finds an error, the checker SHALL go on checking and report every
@@ -29,35 +32,41 @@ requirements:
         rationale: An author or an agent then fixes every problem in one pass instead of one per
           run.
         serves: [N1, N5]
-        status: approved
+        status: implemented
+      - id: R2.3
+        title: Unreadable Sets Are Errors
+        text: If a rule needs a set the checker cannot read, then the checker SHALL report an error
+          naming that set.
+        rationale: A rule left unchecked must not pass for a rule that holds.
+        status: implemented
   - id: R3
     title: Findings Locate Themselves
     text: The checker SHALL report each finding with the file, line, id and field it concerns.
     serves: [N5]
-    status: approved
+    status: implemented
   - id: R4
     title: Findings As JSON
     text: Where JSON output is requested, the checker SHALL print its findings as one JSON
       document.
     serves: [N5]
-    status: approved
+    status: implemented
   - id: R5
     title: Errors Fail The Run
     text: If the checker reports an error, then the checker SHALL exit with a non-zero status.
     serves: [N5, N11]
-    status: approved
+    status: implemented
     children:
       - id: R5.1
         title: Warnings Do Not Fail The Run
         text: The checker SHALL NOT exit with a non-zero status because of warnings alone.
-        status: approved
+        status: implemented
       - id: R5.2
         title: Warnings As Errors
         text: Where warnings are to be treated as errors, the checker SHALL exit with a non-zero
           status when it reports a warning.
-        status: approved
+        status: implemented
   - id: R6
     title: One Hook To Adopt
     text: The shall repository SHALL provide a pre-commit hook that runs the checker.
     serves: [N11]
-    status: approved
+    status: implemented

@@ -1,6 +1,5 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/koniarik/shall/schema/format-1/items.schema.json",
   "title": "shall items, format 1",
   "$defs": {
     "objectiveId": { "type": "string", "pattern": "^O[1-9][0-9]*(\\.[1-9][0-9]*)*$" },

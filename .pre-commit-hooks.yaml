@@ -1,0 +1,7 @@
+- id: shall-check
+  name: shall check
+  description: Checks the shall sets in the repository.
+  entry: shall check
+  language: golang
+  pass_filenames: false
+  files: (^|/)(shall\.yaml|[^/]+\.shall\.yaml)$

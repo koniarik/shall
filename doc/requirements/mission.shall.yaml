@@ -133,3 +133,10 @@ needs:
     text: Adopt shall in an existing repository with one hook entry.
     serves: [O6]
     status: hypothesis
+  - id: N12
+    title: Readable Code
+    stakeholder: S6
+    text: Contributors and agents can read and change the code without first learning a house
+      style.
+    serves: [mission]
+    status: hypothesis

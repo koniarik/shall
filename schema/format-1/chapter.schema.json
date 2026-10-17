@@ -1,6 +1,5 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/koniarik/shall/schema/format-1/chapter.schema.json",
   "title": "shall chapter file, format 1",
   "type": "object",
   "required": ["title", "requirements"],

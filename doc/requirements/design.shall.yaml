@@ -1,0 +1,113 @@
+---
+title: Design
+requirements:
+  - id: R19
+    title: A Single Go Binary
+    text: The tool SHALL be one binary, written in Go, that runs with nothing else installed.
+    rationale: Adopters in a department of embedded engineers then need no runtime, and the same
+      binary serves developers, pre-commit and CI. TypeScript was not taken because every machine
+      would need Node.js, which refuses to run TypeScript inside node_modules, and npm is
+      blocking the build-on-install that a hook installed from git would rely on. Rust was not
+      taken for its weaker YAML libraries and slower builds.
+    serves: [N11]
+    verify: inspection
+    status: implemented
+    children:
+      - id: R19.1
+        title: Installed With Go
+        text: The tool SHALL install with go install from a checkout of its repository.
+        rationale: pre-commit builds a golang hook this way inside its clone of the repository,
+          fetching Go when the machine has none.
+        serves: [R6]
+        status: implemented
+      - id: R19.2
+        title: A Module Named shall
+        text: The tool's Go module SHALL be named shall, with no host in its name.
+        rationale: The code then reads the same wherever the repository is hosted. Naming the
+          module after its repository's address was not taken; it would let go install fetch a
+          release by that address, which pre-commit and release binaries make unnecessary.
+        serves: [N12]
+        verify: inspection
+        status: implemented
+  - id: R20
+    title: YAML Read With Positions
+    text: The tool SHALL read YAML through the goccy/go-yaml package.
+    rationale: It is maintained, and its syntax tree keeps the position of every token, which
+      gives each finding its line. go-yaml v3 was not taken because it is frozen, and v4 because
+      it is still a release candidate.
+    serves: [R3, N5]
+    verify: inspection
+    status: implemented
+    children:
+      - id: R20.1
+        title: One Canonical Layout
+        text: The tool SHALL write each file it changes in one canonical layout, through a printer
+          of its own.
+        rationale: Edits then show in a diff as the change and nothing else, whatever layout a
+          library would have chosen, and the files a set holds stay alike. The files use a small
+          part of YAML, which a short printer covers.
+        serves: [N1, N5]
+        status: approved
+  - id: R21
+    title: Own Schema Validator
+    text: The tool SHALL check the shape of each file against the format's JSON Schema with a
+      validator of its own.
+    rationale: The schema uses a small subset of JSON Schema, which a short interpreter covers
+      without a dependency, and an own validator reports each error on the YAML node it concerns,
+      in the format's terms. A JSON Schema library was not taken, to keep the supply chain small.
+    serves: [R2, R3]
+    status: implemented
+    children:
+      - id: R21.1
+        title: Only The Supported Keywords
+        text: If the schema uses a keyword the validator does not implement, then the validator
+          SHALL refuse the schema.
+        rationale: Editors validate the same schema with their own engines, and a keyword the
+          validator skipped would let the two disagree unnoticed.
+        status: implemented
+  - id: R22
+    title: Standard Testing Package
+    text: The tool's tests SHALL use the testing package of Go's standard library.
+    rationale: It needs no dependency, and go test writes machine-readable results with its json
+      flag, which evidence tooling can read.
+    serves: [R19]
+    verify: inspection
+    status: implemented
+    children:
+      - id: R22.1
+        title: Tests Name What They Verify
+        text: The tool's tests SHALL name each requirement they verify with a verifies attribute,
+          one t.Attr call per requirement.
+        rationale: go test with its json flag then reports each named requirement beside the
+          result of the test that verifies it, so evidence tooling reads the link instead of
+          parsing test names.
+        status: implemented
+  - id: R23
+    title: Standard Flag Parsing
+    text: The tool SHALL parse its command line with the flag package of Go's standard library.
+    rationale: One flag set per command covers a directory argument and a few options without a
+      dependency. Cobra was not taken; its generated help and command trees pay off only for a
+      command line far larger than this one.
+    serves: [N5]
+    verify: inspection
+    status: implemented
+  - id: R24
+    title: Common Go Style
+    text: The tool's source SHALL follow the Google Go Style Guide.
+    rationale: Contributors and agents expect the language's common conventions rather than a
+      house style they must first learn.
+    serves: [N12]
+    verify: inspection
+    status: implemented
+    links:
+      - url: https://google.github.io/styleguide/go/
+        title: Google Go Style Guide
+    children:
+      - id: R24.1
+        title: Formatted By gofmt
+        text: The tool's source SHALL be formatted as gofmt formats it.
+        status: implemented
+      - id: R24.2
+        title: Clean Under go vet
+        text: The tool's source SHALL pass go vet without findings.
+        status: implemented

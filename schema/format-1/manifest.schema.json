@@ -1,6 +1,5 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/koniarik/shall/schema/format-1/manifest.schema.json",
   "title": "shall manifest, format 1",
   "type": "object",
   "required": ["name", "format"],
