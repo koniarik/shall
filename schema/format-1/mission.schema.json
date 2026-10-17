@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/koniarik/shall/schema/format-1/mission.schema.json",
+  "title": "shall mission file, format 1",
+  "type": "object",
+  "required": ["mission"],
+  "additionalProperties": false,
+  "properties": {
+    "mission": { "$ref": "items.schema.json#/$defs/text" },
+    "ranking": { "type": "array", "items": { "$ref": "items.schema.json#/$defs/objectiveId" } },
+    "objectives": { "type": "array", "items": { "$ref": "items.schema.json#/$defs/objective" } },
+    "stakeholders": { "type": "array", "items": { "$ref": "items.schema.json#/$defs/stakeholder" } },
+    "needs": { "type": "array", "items": { "$ref": "items.schema.json#/$defs/need" } },
+    "retired": { "$ref": "items.schema.json#/$defs/retired" }
+  }
+}

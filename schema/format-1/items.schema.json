@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/koniarik/shall/schema/format-1/items.schema.json",
+  "title": "shall items, format 1",
+  "$defs": {
+    "objectiveId": { "type": "string", "pattern": "^O[1-9][0-9]*(\\.[1-9][0-9]*)*$" },
+    "stakeholderId": { "type": "string", "pattern": "^S[1-9][0-9]*(\\.[1-9][0-9]*)*$" },
+    "needId": { "type": "string", "pattern": "^N[1-9][0-9]*(\\.[1-9][0-9]*)*$" },
+    "requirementId": { "type": "string", "pattern": "^R[1-9][0-9]*(\\.[1-9][0-9]*)*$" },
+    "foreign": { "type": "string", "pattern": "^[a-z][a-z0-9-]*/[OSNR][1-9][0-9]*(\\.[1-9][0-9]*)*$" },
+    "text": { "type": "string", "minLength": 1 },
+
+    "notes": { "type": "array", "items": { "$ref": "#/$defs/text" } },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["url"],
+        "additionalProperties": false,
+        "properties": {
+          "url": { "type": "string", "format": "uri" },
+          "title": { "$ref": "#/$defs/text" }
+        }
+      }
+    },
+    "retired": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[OSNR][1-9][0-9]*(\\.[1-9][0-9]*)*$" },
+          "title": { "$ref": "#/$defs/text" }
+        }
+      }
+    },
+
+    "objective": {
+      "type": "object",
+      "required": ["id", "title", "text", "measure"],
+      "$ref": "#/$defs/objectiveFields"
+    },
+    "objectiveChild": {
+      "type": "object",
+      "required": ["id", "title", "text"],
+      "$ref": "#/$defs/objectiveFields"
+    },
+    "objectiveFields": {
+      "unevaluatedProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/objectiveId" },
+        "title": { "$ref": "#/$defs/text" },
+        "text": { "$ref": "#/$defs/text" },
+        "measure": { "$ref": "#/$defs/text" },
+        "mirrors": { "$ref": "#/$defs/foreign" },
+        "notes": { "$ref": "#/$defs/notes" },
+        "links": { "$ref": "#/$defs/links" },
+        "retired": { "$ref": "#/$defs/retired" },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/objectiveChild" } }
+      }
+    },
+
+    "stakeholder": {
+      "type": "object",
+      "required": ["id", "title", "text"],
+      "unevaluatedProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/stakeholderId" },
+        "title": { "$ref": "#/$defs/text" },
+        "text": { "$ref": "#/$defs/text" },
+        "mirrors": { "$ref": "#/$defs/foreign" },
+        "notes": { "$ref": "#/$defs/notes" },
+        "links": { "$ref": "#/$defs/links" },
+        "retired": { "$ref": "#/$defs/retired" },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/stakeholder" } }
+      }
+    },
+
+    "need": {
+      "type": "object",
+      "required": ["id", "title", "text", "stakeholder", "serves", "status"],
+      "$ref": "#/$defs/needFields"
+    },
+    "needChild": {
+      "type": "object",
+      "required": ["id", "title", "text", "status"],
+      "$ref": "#/$defs/needFields"
+    },
+    "needFields": {
+      "unevaluatedProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/needId" },
+        "title": { "$ref": "#/$defs/text" },
+        "text": { "$ref": "#/$defs/text" },
+        "stakeholder": { "$ref": "#/$defs/stakeholderId" },
+        "serves": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "anyOf": [{ "$ref": "#/$defs/objectiveId" }, { "const": "mission" }] }
+        },
+        "status": { "enum": ["hypothesis", "validated"] },
+        "mirrors": { "$ref": "#/$defs/foreign" },
+        "notes": { "$ref": "#/$defs/notes" },
+        "links": { "$ref": "#/$defs/links" },
+        "retired": { "$ref": "#/$defs/retired" },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/needChild" } }
+      }
+    },
+
+    "requirement": {
+      "type": "object",
+      "required": ["id", "title", "text", "status"],
+      "$ref": "#/$defs/requirementFields"
+    },
+    "requirementChild": {
+      "type": "object",
+      "required": ["id", "title", "text"],
+      "$ref": "#/$defs/requirementFields"
+    },
+    "requirementFields": {
+      "unevaluatedProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/requirementId" },
+        "title": { "$ref": "#/$defs/text" },
+        "text": { "$ref": "#/$defs/text" },
+        "serves": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "anyOf": [
+              { "$ref": "#/$defs/needId" },
+              { "$ref": "#/$defs/requirementId" },
+              { "$ref": "#/$defs/foreign" }
+            ]
+          }
+        },
+        "rationale": { "$ref": "#/$defs/text" },
+        "verify": { "enum": ["test", "inspection", "analysis", "demonstration"] },
+        "status": { "enum": ["draft", "approved", "implemented", "verified", "waived"] },
+        "mirrors": { "$ref": "#/$defs/foreign" },
+        "notes": { "$ref": "#/$defs/notes" },
+        "links": { "$ref": "#/$defs/links" },
+        "retired": { "$ref": "#/$defs/retired" },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/requirementChild" } }
+      }
+    }
+  }
+}

@@ -1,0 +1,115 @@
+---
+title: Baseline
+requirements:
+  - id: R7
+    title: Secure By Default
+    text: When input arrives over the network, the product SHALL validate it before anything acts
+      on it.
+    status: approved
+    links:
+      - url: https://owasp.org/www-project-application-security-verification-standard/
+        title: OWASP Application Security Verification Standard
+  - id: R8
+    title: Least Privilege
+    text: If no right granted to a request's actor allows the request, then the product SHALL
+      refuse it.
+    status: approved
+    links:
+      - url: https://owasp.org/www-project-application-security-verification-standard/
+        title: OWASP Application Security Verification Standard
+  - id: R9
+    title: Attributed Changes
+    text: When its state changes, the product SHALL record who changed it, what changed and when.
+    status: approved
+    links:
+      - url: https://www.iso.org/standard/78176.html
+        title: ISO/IEC 25010 product quality model, accountability
+  - id: R10
+    title: Fail Loud
+    text: If an error occurs, then the product SHALL report and record it where it happens.
+    status: approved
+    links:
+      - url: https://www.martinfowler.com/ieeeSoftware/failFast.pdf
+        title: Jim Shore, Fail Fast
+    children:
+      - id: R10.1
+        title: No Invented Results
+        text: If an error occurs, then the product SHALL NOT invent a result to cover it.
+        status: approved
+  - id: R11
+    title: Observable
+    text: The product SHALL expose the health of each of its components, and the logs and metrics
+      needed to diagnose it without attaching a debugger.
+    status: approved
+    links:
+      - url: https://sre.google/sre-book/monitoring-distributed-systems/
+        title: Google SRE, Monitoring Distributed Systems
+  - id: R12
+    title: Bounded Resources
+    text: If memory, disk or a queue reaches its limit, then the product SHALL report it instead of
+      crashing or growing without end.
+    status: approved
+    links:
+      - url: https://www.iso.org/standard/78176.html
+        title: ISO/IEC 25010 product quality model, capacity
+  - id: R13
+    title: Durable
+    text: If a process crashes or restarts, then the product SHALL NOT lose anything it has
+      acknowledged.
+    status: approved
+    links:
+      - url: https://www.iso.org/standard/78176.html
+        title: ISO/IEC 25010 product quality model, recoverability
+  - id: R14
+    title: Upgradable
+    text: The product SHALL mark its stored data and every wire format with a version.
+    status: approved
+    links:
+      - url: https://www.iso.org/standard/78176.html
+        title: ISO/IEC 25010 product quality model, compatibility
+    children:
+      - id: R14.1
+        title: Upgrades Keep Data
+        text: When the product is upgraded, the product SHALL NOT lose stored data.
+        status: approved
+  - id: R15
+    title: No Secrets In The Clear
+    text: The product SHALL NOT write a secret into a log, the repository or an error message.
+    verify: inspection
+    status: approved
+    links:
+      - url: https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html
+        title: OWASP Secrets Management Cheat Sheet
+  - id: R16
+    title: Explicit Retention
+    text: The product SHALL NOT delete anything unless a declared policy says so.
+    status: approved
+    links:
+      - url: https://gdpr-info.eu/art-5-gdpr/
+        title: GDPR article 5, storage limitation
+    children:
+      - id: R16.1
+        title: Deletions Are Recorded
+        text: When a policy deletes something, the product SHALL record what it deleted.
+        status: approved
+  - id: R17
+    title: Accessible Interface
+    text: Where the product has a user interface, the product SHALL meet WCAG 2.2 level AA.
+    verify: inspection
+    status: approved
+    links:
+      - url: https://www.w3.org/TR/WCAG22/
+        title: Web Content Accessibility Guidelines 2.2
+  - id: R18
+    title: Known Supply Chain
+    text: The product SHALL pin every dependency to a version.
+    verify: inspection
+    status: approved
+    links:
+      - url: https://slsa.dev/
+        title: SLSA supply-chain levels
+    children:
+      - id: R18.1
+        title: Known Licences
+        text: The product SHALL record the licence of every dependency.
+        status: approved

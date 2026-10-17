@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/koniarik/shall/schema/format-1/chapter.schema.json",
+  "title": "shall chapter file, format 1",
+  "type": "object",
+  "required": ["title", "requirements"],
+  "additionalProperties": false,
+  "properties": {
+    "title": { "$ref": "items.schema.json#/$defs/text" },
+    "requirements": { "type": "array", "items": { "$ref": "items.schema.json#/$defs/requirement" } },
+    "retired": { "$ref": "items.schema.json#/$defs/retired" }
+  }
+}

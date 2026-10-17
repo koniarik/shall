@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/koniarik/shall/schema/format-1/manifest.schema.json",
+  "title": "shall manifest, format 1",
+  "type": "object",
+  "required": ["name", "format"],
+  "additionalProperties": false,
+  "properties": {
+    "name": { "type": "string", "minLength": 1 },
+    "format": { "const": 1 },
+    "path": { "type": "string", "minLength": 1 },
+    "depends": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+      "additionalProperties": { "$ref": "#/$defs/dependency" }
+    }
+  },
+  "$defs": {
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "git": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "rev": { "type": "string", "minLength": 1 }
+      },
+      "dependentRequired": { "git": ["rev"] }
+    }
+  }
+}
