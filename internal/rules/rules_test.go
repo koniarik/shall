@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"shall/internal/finding"
+	"shall/internal/model"
 	"shall/internal/tree"
 )
 
@@ -24,15 +25,15 @@ func run(t *testing.T, manifest string, files map[string]string) []finding.Findi
 	if err != nil {
 		t.Fatal(err)
 	}
-	var parsed []File
+	var parsed []*model.File
 	for path, src := range files {
 		n, err := tree.Parse([]byte(src))
 		if err != nil {
 			t.Fatalf("%s: %v", path, err)
 		}
-		parsed = append(parsed, File{Path: path, Tree: n})
+		parsed = append(parsed, &model.File{Path: path, Tree: n})
 	}
-	return Check("shall.yaml", m, parsed)
+	return Check("shall.yaml", m, model.New(parsed))
 }
 
 func chapter(src string) map[string]string {

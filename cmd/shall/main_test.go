@@ -2,11 +2,19 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"io"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"shall/internal/serve"
 )
 
 const manifest = "name: x\nformat: 1\n"
@@ -36,7 +44,7 @@ func write(t *testing.T, files map[string]string) string {
 func shall(t *testing.T, args ...string) (int, string) {
 	t.Helper()
 	var out, errs bytes.Buffer
-	code := run(args, &out, &errs)
+	code := run(t.Context(), args, &out, &errs)
 	return code, out.String() + errs.String()
 }
 
@@ -186,5 +194,76 @@ func TestShallsOwnSetHasNoErrors(t *testing.T) {
 func TestUsage(t *testing.T) {
 	if code, _ := shall(t); code != 2 {
 		t.Fatalf("exit %d without a command, want 2", code)
+	}
+}
+
+// lockedBuffer is output that a running command and a test share.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func TestServeSaysWhereItServes(t *testing.T) {
+	t.Attr("verifies", "R25.1")
+	t.Attr("verifies", "R25.3")
+	dir := write(t, map[string]string{"shall.yaml": manifest, "mission.shall.yaml": mission})
+	ctx, cancel := context.WithCancel(t.Context())
+	var out lockedBuffer
+	done := make(chan int)
+	go func() { done <- run(ctx, []string{"serve", "-addr", "127.0.0.1:0", dir}, &out, &out) }()
+	var addr string
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		if _, rest, ok := strings.Cut(out.String(), " at "); ok {
+			addr = strings.TrimSpace(rest)
+			break
+		}
+	}
+	if !strings.HasPrefix(addr, "http://127.0.0.1:") {
+		cancel()
+		t.Fatalf("output = %q, want the address it serves on", out.String())
+	}
+	resp, err := http.Get(addr + "api/sets")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(body), `"name": "x"`) {
+		t.Errorf("sets = %s, want set x", body)
+	}
+	cancel()
+	if code := <-done; code != 0 {
+		t.Errorf("exit %d after being stopped, want 0", code)
+	}
+}
+
+func TestServeIsLocalByDefault(t *testing.T) {
+	t.Attr("verifies", "R25.2")
+	host, _, err := net.SplitHostPort(serve.DefaultAddr)
+	if ip := net.ParseIP(host); err != nil || ip == nil || !ip.IsLoopback() {
+		t.Errorf("default address %s is not on this machine only", serve.DefaultAddr)
+	}
+}
+
+func TestServeRefusesATakenAddress(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	if code, out := shall(t, "serve", "-addr", ln.Addr().String(), t.TempDir()); code != 1 || !strings.Contains(out, "shall:") {
+		t.Errorf("exit %d %q, want 1 with the reason", code, out)
 	}
 }

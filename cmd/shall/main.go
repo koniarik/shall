@@ -1,43 +1,105 @@
-// Command shall checks a product's mission, needs and requirements.
+// Command shall checks a product's mission, needs and requirements, and
+// serves them as documents.
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
+	"os/signal"
+	"strconv"
 	"strings"
+	"syscall"
 
 	"shall/internal/check"
 	"shall/internal/finding"
+	"shall/internal/serve"
 )
 
-const usage = `usage: shall check [-json] [-warnings-as-errors] [directory]`
+const usage = `usage: shall check [-json] [-warnings-as-errors] [directory]
+       shall serve [-addr host:port] [directory]`
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	code := run(ctx, os.Args[1:], os.Stdout, os.Stderr)
+	stop()
+	os.Exit(code)
 }
 
-func run(args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 || args[0] != "check" {
-		fmt.Fprintln(stderr, usage)
+func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 {
+		switch args[0] {
+		case "check":
+			return runCheck(args[1:], stdout, stderr)
+		case "serve":
+			return runServe(ctx, args[1:], stdout, stderr)
+		}
+	}
+	fmt.Fprintln(stderr, usage)
+	return 2
+}
+
+// directory returns the one directory argument, the current one by default.
+func directory(flags *flag.FlagSet, stderr io.Writer) (string, bool) {
+	switch flags.NArg() {
+	case 0:
+		return ".", true
+	case 1:
+		return flags.Arg(0), true
+	}
+	fmt.Fprintln(stderr, usage)
+	return "", false
+}
+
+func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("serve", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	addr := flags.String("addr", serve.DefaultAddr, "the address and port to listen on")
+	if err := flags.Parse(args); err != nil {
 		return 2
 	}
+	root, ok := directory(flags, stderr)
+	if !ok {
+		return 2
+	}
+	ln, err := net.Listen("tcp", *addr)
+	if err != nil {
+		fmt.Fprintln(stderr, "shall:", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "shall serves %s at http://%s/\n", root, openable(ln.Addr()))
+	if err := serve.Run(ctx, root, ln); err != nil {
+		fmt.Fprintln(stderr, "shall:", err)
+		return 1
+	}
+	return 0
+}
+
+// openable returns an address a browser on this machine can open: a server
+// listening on every interface is reached through localhost.
+func openable(a net.Addr) string {
+	tcp, ok := a.(*net.TCPAddr)
+	if !ok || !tcp.IP.IsUnspecified() {
+		return a.String()
+	}
+	return net.JoinHostPort("localhost", strconv.Itoa(tcp.Port))
+}
+
+func runCheck(args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("check", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	asJSON := flags.Bool("json", false, "print the findings as one JSON document")
 	strict := flags.Bool("warnings-as-errors", false, "fail on warnings too")
-	if err := flags.Parse(args[1:]); err != nil {
+	if err := flags.Parse(args); err != nil {
 		return 2
 	}
-	if flags.NArg() > 1 {
-		fmt.Fprintln(stderr, usage)
+	root, ok := directory(flags, stderr)
+	if !ok {
 		return 2
-	}
-	root := "."
-	if flags.NArg() == 1 {
-		root = flags.Arg(0)
 	}
 	findings, err := check.Run(root)
 	if err != nil {

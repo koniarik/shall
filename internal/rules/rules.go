@@ -3,44 +3,19 @@ package rules
 
 import (
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"strings"
 
 	"shall/internal/finding"
+	"shall/internal/model"
 	"shall/internal/set"
 	"shall/internal/tree"
 )
 
-// File is one parsed file of a set, its path as findings name it.
-type File struct {
-	Path string
-	Tree *tree.Node
-}
-
-type item struct {
-	kind   byte
-	id     string
-	file   string
-	node   *tree.Node
-	parent *item
-}
-
-type retiredEntry struct {
-	id    string
-	file  string
-	line  int
-	owner *item
-	kinds string
-}
-
 type checker struct {
-	out         []finding.Finding
-	items       []*item
-	byID        map[string]*item
-	retired     map[string]*retiredEntry
-	retiredList []*retiredEntry
-	depends     map[string]bool
+	out     []finding.Finding
+	set     *model.Set
+	depends map[string]bool
 }
 
 var (
@@ -50,30 +25,26 @@ var (
 	childNo   = regexp.MustCompile(`^[1-9][0-9]*$`)
 )
 
-// Check returns the findings of the within-set rules for a set whose manifest
-// is at manifestPath and whose files are files.
-func Check(manifestPath string, manifest *tree.Node, files []File) []finding.Finding {
-	c := &checker{byID: map[string]*item{}, retired: map[string]*retiredEntry{}, depends: map[string]bool{}}
+// refKinds gives, for each kind of item and field, the kinds of item the
+// field can name. A field missing here names only items of other sets.
+var refKinds = map[string]string{
+	"N stakeholder": "S",
+	"N serves":      "O",
+	"R serves":      "NR",
+}
+
+// Check returns the findings of the within-set rules for the set s, whose
+// manifest is at manifestPath.
+func Check(manifestPath string, manifest *tree.Node, s *model.Set) []finding.Finding {
+	c := &checker{set: s, depends: map[string]bool{}}
 	c.checkDepends(manifestPath, manifest)
-	c.checkMissionFile(manifestPath, files)
-	for _, f := range files {
-		if filepath.Base(f.Path) == set.MissionName {
-			c.collect(f, "objectives", 'O')
-			c.collect(f, "stakeholders", 'S')
-			c.collect(f, "needs", 'N')
-			c.collectRetired(f.Path, f.Tree.Get("retired"), nil, "OSN")
-		} else {
-			c.collect(f, "requirements", 'R')
-			c.collectRetired(f.Path, f.Tree.Get("retired"), nil, "R")
-		}
-	}
+	c.checkMissionFile(manifestPath)
+	c.checkRetired()
 	c.checkIDs()
-	for _, f := range files {
-		if filepath.Base(f.Path) == set.MissionName {
-			c.checkRanking(f)
-		}
+	for _, r := range s.Ranking() {
+		c.ref(r, "O")
 	}
-	for _, it := range c.items {
+	for _, it := range s.Items {
 		c.checkItem(it)
 	}
 	return c.out
@@ -98,10 +69,10 @@ func (c *checker) checkDepends(manifestPath string, manifest *tree.Node) {
 	}
 }
 
-func (c *checker) checkMissionFile(manifestPath string, files []File) {
+func (c *checker) checkMissionFile(manifestPath string) {
 	var missions []string
-	for _, f := range files {
-		if filepath.Base(f.Path) == set.MissionName {
+	for _, f := range c.set.Files {
+		if f.Mission {
 			missions = append(missions, f.Path)
 		}
 	}
@@ -113,91 +84,37 @@ func (c *checker) checkMissionFile(manifestPath string, files []File) {
 	}
 }
 
-func (c *checker) collect(f File, key string, kind byte) {
-	list := f.Tree.Get(key)
-	if list == nil || list.Kind != tree.Seq {
-		return
-	}
-	for _, n := range list.Items {
-		c.collectItem(f.Path, n, kind, nil)
-	}
-}
-
-func (c *checker) collectItem(file string, n *tree.Node, kind byte, parent *item) {
-	id, ok := n.Get("id").Str()
-	if !ok || id == "" {
-		return
-	}
-	it := &item{kind: kind, id: id, file: file, node: n, parent: parent}
-	c.items = append(c.items, it)
-	if children := n.Get("children"); children != nil && children.Kind == tree.Seq {
-		for _, ch := range children.Items {
-			c.collectItem(file, ch, kind, it)
-		}
-	}
-	c.collectRetired(file, n.Get("retired"), it, string(kind))
-}
-
-func (c *checker) collectRetired(file string, list *tree.Node, owner *item, kinds string) {
-	if list == nil || list.Kind != tree.Seq {
-		return
-	}
-	for _, n := range list.Items {
-		id, ok := n.Get("id").Str()
-		if !ok || id == "" {
+func (c *checker) checkRetired() {
+	for _, e := range c.set.Retired {
+		if first := c.set.RetiredEntry(e.ID); first != e {
+			c.add(finding.Error, e.File.Path, e.Line, e.ID, "retired", "%s is already retired at %s:%d", e.ID, first.File.Path, first.Line)
 			continue
 		}
-		e := &retiredEntry{id: id, file: file, line: n.Line, owner: owner, kinds: kinds}
-		if prev, dup := c.retired[id]; dup {
-			c.add(finding.Error, file, n.Line, id, "retired", "%s is already retired at %s:%d", id, prev.file, prev.line)
-			continue
+		switch {
+		case e.Owner == nil && (strings.Contains(e.ID, ".") || !strings.ContainsRune(e.Holds, rune(e.ID[0]))):
+			c.add(finding.Error, e.File.Path, e.Line, e.ID, "retired", "%s cannot be retired here; this list holds top-level ids of kinds %s", e.ID, e.Holds)
+		case e.Owner != nil && !isChildOf(e.ID, e.Owner.ID):
+			c.add(finding.Error, e.File.Path, e.Line, e.ID, "retired", "%s cannot be retired under %s, which only retires its own children", e.ID, e.Owner.ID)
 		}
-		c.retired[id] = e
-		c.retiredList = append(c.retiredList, e)
 	}
 }
 
 func (c *checker) checkIDs() {
-	for _, it := range c.items {
-		line := it.node.Get("id").Line
-		if it.parent == nil && strings.Contains(it.id, ".") {
-			c.add(finding.Error, it.file, line, it.id, "id", "a top-level id has no \".\"")
+	for _, it := range c.set.Items {
+		line := it.Node.Get("id").Line
+		if it.Parent == nil && strings.Contains(it.ID, ".") {
+			c.add(finding.Error, it.File.Path, line, it.ID, "id", "a top-level id has no \".\"")
 		}
-		if it.parent != nil && !isChildOf(it.id, it.parent.id) {
-			c.add(finding.Error, it.file, line, it.id, "id", "a child of %s has the id %s.<number>", it.parent.id, it.parent.id)
+		if it.Parent != nil && !isChildOf(it.ID, it.Parent.ID) {
+			c.add(finding.Error, it.File.Path, line, it.ID, "id", "a child of %s has the id %s.<number>", it.Parent.ID, it.Parent.ID)
 		}
-		if e, ok := c.retired[it.id]; ok {
-			c.add(finding.Error, it.file, line, it.id, "id", "%s is retired at %s:%d and cannot return", it.id, e.file, e.line)
+		if e := c.set.RetiredEntry(it.ID); e != nil {
+			c.add(finding.Error, it.File.Path, line, it.ID, "id", "%s is retired at %s:%d and cannot return", it.ID, e.File.Path, e.Line)
 			continue
 		}
-		if prev, ok := c.byID[it.id]; ok {
-			c.add(finding.Error, it.file, line, it.id, "id", "%s is already used at %s:%d", it.id, prev.file, prev.node.Line)
-			continue
+		if first := c.set.Item(it.ID); first != it {
+			c.add(finding.Error, it.File.Path, line, it.ID, "id", "%s is already used at %s:%d", it.ID, first.File.Path, first.Node.Line)
 		}
-		c.byID[it.id] = it
-	}
-	for _, e := range c.retiredList {
-		switch {
-		case e.owner == nil && (strings.Contains(e.id, ".") || !strings.ContainsRune(e.kinds, rune(e.id[0]))):
-			c.add(finding.Error, e.file, e.line, e.id, "retired", "%s cannot be retired here; this list holds top-level ids of kinds %s", e.id, e.kinds)
-		case e.owner != nil && !isChildOf(e.id, e.owner.id):
-			c.add(finding.Error, e.file, e.line, e.id, "retired", "%s cannot be retired under %s, which only retires its own children", e.id, e.owner.id)
-		}
-	}
-}
-
-// retiredWith returns the entry that retires id, itself or with an ancestor,
-// or nil.
-func (c *checker) retiredWith(id string) *retiredEntry {
-	for {
-		if e, ok := c.retired[id]; ok {
-			return e
-		}
-		i := strings.LastIndex(id, ".")
-		if i < 0 {
-			return nil
-		}
-		id = id[:i]
 	}
 }
 
@@ -206,103 +123,66 @@ func isChildOf(id, parent string) bool {
 	return ok && childNo.MatchString(rest)
 }
 
-func (c *checker) ref(file string, n *tree.Node, from, field string, kinds string) {
-	id, ok := n.Str()
-	if !ok {
-		return
+func (c *checker) ref(r model.Ref, kinds string) {
+	from := ""
+	if r.From != nil {
+		from = r.From.ID
 	}
+	file, line, id := r.File.Path, r.Node.Line, r.ID
 	if strings.Contains(id, "/") {
 		name, _, _ := strings.Cut(id, "/")
 		if !c.depends[name] {
-			c.add(finding.Error, file, n.Line, from, field, "%s names set %q, which the manifest does not depend on", id, name)
+			c.add(finding.Error, file, line, from, r.Field, "%s names set %q, which the manifest does not depend on", id, name)
 		}
 		return
 	}
-	if e := c.retiredWith(id); e != nil {
-		c.add(finding.Warning, file, n.Line, from, field, "%s is retired, at %s:%d", id, e.file, e.line)
+	if e := c.set.RetiredWith(id); e != nil {
+		c.add(finding.Warning, file, line, from, r.Field, "%s is retired, at %s:%d", id, e.File.Path, e.Line)
 		return
 	}
-	target, ok := c.byID[id]
-	if !ok {
-		c.add(finding.Error, file, n.Line, from, field, "%s is no item of this set", id)
+	target := c.set.Item(id)
+	if target == nil {
+		c.add(finding.Error, file, line, from, r.Field, "%s is no item of this set", id)
 		return
 	}
-	if !strings.ContainsRune(kinds, rune(target.kind)) {
-		c.add(finding.Error, file, n.Line, from, field, "%s cannot be named in %s", id, field)
+	if !strings.ContainsRune(kinds, rune(target.Kind)) {
+		c.add(finding.Error, file, line, from, r.Field, "%s cannot be named in %s", id, r.Field)
 	}
 }
 
-func (c *checker) refs(it *item, field, kinds string) {
-	list := it.node.Get(field)
-	if list == nil || list.Kind != tree.Seq {
-		return
+func (c *checker) checkItem(it *model.Item) {
+	for _, r := range it.Refs() {
+		c.ref(r, refKinds[string(it.Kind)+" "+r.Field])
 	}
-	for _, n := range list.Items {
-		if s, _ := n.Str(); it.kind == 'N' && s == "mission" {
-			continue
-		}
-		c.ref(it.file, n, it.id, field, kinds)
-	}
-}
-
-func (c *checker) checkRanking(f File) {
-	list := f.Tree.Get("ranking")
-	if list == nil || list.Kind != tree.Seq {
-		return
-	}
-	for _, n := range list.Items {
-		c.ref(f.Path, n, "", "ranking", "O")
-	}
-}
-
-func (c *checker) checkItem(it *item) {
-	if m := it.node.Get("mirrors"); m != nil {
-		c.ref(it.file, m, it.id, "mirrors", "")
-	}
-	switch it.kind {
-	case 'N':
-		if s := it.node.Get("stakeholder"); s != nil {
-			c.ref(it.file, s, it.id, "stakeholder", "S")
-		}
-		c.refs(it, "serves", "O")
-	case 'R':
-		c.refs(it, "serves", "NR")
+	if it.Kind == 'R' {
 		c.checkRequirement(it)
 	}
 }
 
-func (c *checker) checkRequirement(it *item) {
-	if it.parent == nil && it.node.Get("serves") == nil {
-		c.add(finding.Warning, it.file, it.node.Line, it.id, "serves", "the requirement serves nothing")
+func (c *checker) checkRequirement(it *model.Item) {
+	file := it.File.Path
+	if it.Parent == nil && it.Node.Get("serves") == nil {
+		c.add(finding.Warning, file, it.Node.Line, it.ID, "serves", "the requirement serves nothing")
 	}
-	if it.parent != nil && it.node.Get("status") == nil && !waived(it.parent) {
-		c.add(finding.Error, it.file, it.node.Line, it.id, "status", "field \"status\" is missing")
+	if it.Parent != nil && it.Node.Get("status") == nil && !it.Parent.Waived() {
+		c.add(finding.Error, file, it.Node.Line, it.ID, "status", "field \"status\" is missing")
 	}
-	textNode := it.node.Get("text")
+	textNode := it.Node.Get("text")
 	text, ok := textNode.Str()
 	if !ok {
 		return
 	}
 	switch n := len(shallWord.FindAllString(text, -1)); {
 	case n == 0:
-		c.add(finding.Error, it.file, textNode.Line, it.id, "text", "the text states no SHALL; a requirement makes one promise")
+		c.add(finding.Error, file, textNode.Line, it.ID, "text", "the text states no SHALL; a requirement makes one promise")
 	case n > 1:
-		c.add(finding.Error, it.file, textNode.Line, it.id, "text", "the text says SHALL %d times; a requirement makes one promise", n)
+		c.add(finding.Error, file, textNode.Line, it.ID, "text", "the text says SHALL %d times; a requirement makes one promise", n)
 	}
 	if m := otherWord.FindString(text); m != "" {
-		c.add(finding.Error, it.file, textNode.Line, it.id, "text", "the text uses %s; a requirement uses only SHALL and SHALL NOT", m)
+		c.add(finding.Error, file, textNode.Line, it.ID, "text", "the text uses %s; a requirement uses only SHALL and SHALL NOT", m)
 	}
 	if !ears.MatchString(text) {
-		c.add(finding.Warning, it.file, textNode.Line, it.id, "text",
+		c.add(finding.Warning, file, textNode.Line, it.ID, "text",
 			"the text is in none of the sentence forms: The …, When …, While …, Where …, If …, then …")
 	}
-}
-
-func waived(it *item) bool {
-	for ; it != nil; it = it.parent {
-		if s, _ := it.node.Get("status").Str(); s == "waived" {
-			return true
-		}
-	}
-	return false
 }

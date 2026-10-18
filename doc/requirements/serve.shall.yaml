@@ -7,19 +7,19 @@ requirements:
       directory, the current one by default.
     rationale: The sets a reader browses are then the ones the checker checks.
     serves: [N13]
-    status: approved
+    status: implemented
     children:
       - id: R25.1
         title: Address From The Command Line
         text: Where its command line gives an address and port, the server SHALL listen on them.
-        status: approved
+        status: implemented
       - id: R25.2
         title: Local By Default
         text: Where its command line gives no address, the server SHALL accept connections only
           from the machine it runs on.
         rationale: Serving a repository to the network is then a choice someone makes, not a
           default they inherit.
-        status: approved
+        status: implemented
         children:
           - id: R25.2.1
             title: Local Means Local
@@ -30,69 +30,71 @@ requirements:
               a domain it controls, by DNS rebinding. A server given a network address can be
               reached from that network anyway, so the check would add nothing there.
             serves: [R7]
-            status: approved
+            status: implemented
       - id: R25.3
         title: Says Where It Serves
         text: When started, the server SHALL print the address it serves on.
-        status: approved
+        status: implemented
       - id: R25.4
         title: Sets Listed
         text: The server SHALL list the sets it serves by name on its start page, each as a link
           to its document.
-        status: approved
+        status: implemented
       - id: R25.5
         title: Clashing Names
         text: If two sets it serves share a name, then the server SHALL list that name with an
           error naming both manifests, and serve neither under it.
         rationale: Keeping set names unique is up to the sets' authors. The server cannot tell
           which of the two an address means, so it points out the clash.
-        status: approved
+        status: implemented
   - id: R26
     title: One Document Per Set
     text: The server SHALL show each set as one document, its mission file first and then its
       chapters, each item in the order its file holds it and each child under its parent.
     serves: [N13]
-    status: approved
+    status: implemented
     children:
       - id: R26.1
         title: Statements Shown
         text: The server SHALL show each item of the mission file and of an unfolded chapter with
           its id, title and text.
-        status: approved
+        status: implemented
       - id: R26.2
         title: Views Are Links
         text: The server SHALL keep each choice the reader makes about the view in the page
-          address, so that opening the address again shows the same view.
-        rationale: A link then opens the view its sender saw.
-        status: approved
+          address, except the colour scheme, so that opening the address again shows the same
+          view.
+        rationale: A link then opens the view its sender saw. The colour scheme stays with each
+          reader instead, so that a link does not impose the sender's on whoever opens it.
+        status: implemented
       - id: R26.3
         title: Statuses Shown
         text: The server SHALL show the status of each need and the effective status of each
           requirement, with a requirement's written status beside it where the two differ.
-        status: approved
+        status: implemented
       - id: R26.4
         title: Chapters Folded
         text: The server SHALL show each chapter folded, as its title and the number of its items
           and findings, until it is unfolded.
         rationale: A set of thousands of requirements then opens as quickly as a small one, and
           the folded document doubles as its outline.
-        status: approved
+        status: implemented
       - id: R26.5
         title: Loaded When Unfolded
         text: While a chapter is folded, the server SHALL send none of its items to the page,
           except in a preview or a backlink.
-        status: approved
+        status: implemented
       - id: R26.6
         title: Unfolded To Reach An Item
-        text: When a link, an item's address or a jump leads to an item in a folded chapter, the
-          server SHALL unfold that chapter.
-        status: approved
+        text: When a link, an item's address, a jump or an outline entry leads to a folded
+          chapter or to an item in one, the server SHALL unfold that chapter.
+        status: implemented
       - id: R26.7
         title: A Set's Address
         text: The server SHALL give each set's document an address made of the set's name.
         rationale: Ids are unique only within a set, so every address names the set it belongs
           to.
-        status: approved
+        status: implemented
       - id: R26.8
         title: Broken Files In Place
         text: If a file of a set cannot be read or parsed as YAML, then the server SHALL show the
@@ -101,78 +103,122 @@ requirements:
           the set stays readable. Showing the last version that parsed was not taken because the
           page would then show what no file holds.
         serves: [N13, N14]
-        status: approved
+        status: implemented
       - id: R26.9
         title: Chapters In Path Order
         text: The server SHALL show a set's chapters in the order of their file paths.
         rationale: Authors then choose the order by how they name the files, with no list to keep
           in step with them.
-        status: approved
+        status: implemented
       - id: R26.10
         title: Mission First
-        text: The server SHALL show a set's mission statement and ranking before its items.
-        status: approved
+        text: The server SHALL show a set's mission statement before its items.
+        status: implemented
+      - id: R26.11
+        title: Outline
+        text: The server SHALL show beside each document an outline of the mission's parts and of
+          the chapters, each entry a link to its place.
+        rationale: A reader of a large set then moves between its parts in one step.
+        status: implemented
+        children:
+          - id: R26.11.1
+            title: Unfolded Chapters Outlined
+            text: While a chapter is unfolded, the server SHALL list its top-level items under it
+              in the outline.
+            rationale: The outline then lists what the page holds and no more, so a folded
+              chapter still sends none of its items.
+            status: implemented
+          - id: R26.11.2
+            title: Where The Reader Is
+            text: The server SHALL mark in the outline the chapter at the top of the screen.
+            status: implemented
+          - id: R26.11.3
+            title: Outline On Narrow Screens
+            text: While the screen is narrower than 60em, the server SHALL keep the outline folded
+              behind a button.
+            rationale: The document then keeps the width of a phone or a narrow window.
+            status: implemented
+      - id: R26.12
+        title: Unfolded When Reached
+        text: When a folded chapter's heading comes into view, the server SHALL unfold that
+          chapter, unless the reader folded it.
+        rationale: A long set then loads as the reader reaches it, one chapter at a time, and a
+          small one opens whole. Such an unfolding is no choice of the reader's, so it stays out
+          of the page address, which scrolling makes up for; folding a chapter is one, and the
+          address keeps it.
+        status: implemented
+      - id: R26.13
+        title: One Fold Area
+        text: The server SHALL put an item's backlinks, and a requirement's rationale and notes,
+          in one area at the item's end, folded until the reader unfolds it.
+        rationale: The statement then reads first, with what surrounds it one step away.
+        status: implemented
+      - id: R26.14
+        title: Outside Links In A New Tab
+        text: When the reader follows a link that leads outside the server, the server SHALL open
+          it in a new tab.
+        rationale: The document then stays where the reader left it.
+        status: implemented
   - id: R27
     title: Ids Are Links
     text: The server SHALL show every id that a field names, and that names an item the server
       serves, as a link to that item.
     serves: [N13]
-    status: approved
+    status: implemented
     children:
       - id: R27.1
         title: Preview On Hover Or Focus
         text: When the reader points at a link to an item or moves keyboard focus to it, the
           server SHALL show that item's title and text beside it.
         rationale: Previews let a reader follow a reference without losing their place.
-        status: approved
+        status: implemented
       - id: R27.2
         title: Backlinks In Short
         text: The server SHALL show on each item the ids of the items that name it, grouped by the
           field that names them.
-        status: approved
+        status: implemented
         children:
           - id: R27.2.1
             title: Backlinks Unfolded
-            text: When the reader unfolds an item's backlinks, the server SHALL show each item that
-              names it with its title and text.
-            rationale: Full backlinks on every item would bury the document, so they are loaded
-              only when a reader asks for them.
-            status: approved
+            text: When the reader unfolds an item's fold area, the server SHALL show there each
+              item that names it with its title.
+            rationale: Their texts stay out, since each id previews its text on hover or focus.
+            status: implemented
       - id: R27.3
         title: Every Item Has An Address
         text: The server SHALL give each item an address, made of its set's address and its id,
           that opens the document at that item.
-        status: approved
+        status: implemented
       - id: R27.4
         title: Unknown Ids As Text
         text: If a field names an id that is neither an item nor retired in a set the server
           serves, then the server SHALL show that id as plain text.
         rationale: A link must lead somewhere. The checker's finding on the item says what is
           wrong.
-        status: approved
+        status: implemented
       - id: R27.5
         title: Retired Ids Marked
         text: If a field names a retired id, then the server SHALL show that id as plain text,
           marked retired, with the title it was retired under.
-        status: approved
+        status: implemented
   - id: R28
     title: Jump To An Id
     text: When the reader enters an id, the server SHALL show the document at that item, in the
       current set unless the id names another set.
     serves: [N13]
-    status: approved
+    status: implemented
     children:
       - id: R28.1
         title: Jump To No Item
         text: If the reader enters an id that is neither an item nor retired in a set the server
           serves, then the server SHALL keep the document where it is and say that no item has
           that id.
-        status: approved
+        status: implemented
       - id: R28.2
         title: Jump To A Retired Id
         text: If the reader enters a retired id, then the server SHALL keep the document where it
           is and say the file and line where the id was retired.
-        status: approved
+        status: implemented
   - id: R29
     title: Follows The Files
     text: When a set's file changes on disk, the server SHALL show the set as its files then
@@ -180,7 +226,7 @@ requirements:
     rationale: An author edits in their editor and reads in the browser, and the two stay in
       step.
     serves: [N14]
-    status: approved
+    status: implemented
     children:
       - id: R29.1
         title: Any Number Of Tabs
@@ -188,31 +234,69 @@ requirements:
           open.
         rationale: Browsers open only six connections to one server over plain HTTP, and each
           page following the files holds one open.
-        status: approved
+        status: implemented
       - id: R29.2
         title: Place Kept
         text: When a page follows a change, the server SHALL keep the item at the top of the
           screen there, or the item after it if that one was removed.
         rationale: A reader keeps their place while an author saves beside them.
-        status: approved
+        status: implemented
   - id: R30
     title: Findings In Place
     text: The server SHALL show each finding that shall check reports for the set on the item it
       concerns, with its severity.
     rationale: The page and the checker then cannot disagree.
     serves: [N13, N14]
-    status: approved
+    status: implemented
     children:
       - id: R30.1
         title: Findings Without An Item
-        text: The server SHALL show each finding that concerns no item at the top of the
-          document.
-        status: approved
+        text: The server SHALL show each finding that concerns no item at the head of the file it
+          concerns, or at the top of the document when it concerns no file of the set.
+        status: implemented
   - id: R33
     title: Only What It Builds
-    text: The server SHALL send only the pages it builds and the files embedded in its binary,
-      never a file that a request names.
+    text: The server SHALL send only the answers it builds and the files embedded in its
+      binary, never a file that a request names.
     rationale: A request then chooses among the files of the sets the server has read and
       reaches no other, however its path is written, without the server having to check paths.
     serves: [R7]
-    status: approved
+    status: implemented
+  - id: R34
+    title: Black Or White
+    text: The server SHALL let the reader switch its pages between black on white and white on
+      black.
+    serves: [N13]
+    status: implemented
+    children:
+      - id: R34.1
+        title: The System's Scheme First
+        text: While the reader has not chosen a colour scheme, the server SHALL show the one the
+          reader's system asks for.
+        status: implemented
+      - id: R34.2
+        title: Kept By The Browser
+        text: When the reader chooses a colour scheme, the server SHALL keep the choice in the
+          browser's own storage, for every page it serves.
+        rationale: The choice belongs to the reader, not to a set or a link, so no file and no
+          address holds it.
+        status: implemented
+  - id: R36
+    title: An API For Scripts And Agents
+    text: The server SHALL offer everything its pages show of a set as JSON over HTTP.
+    rationale: A script or an agent then reads a set as the page does, with its ids resolved,
+      its statuses worked out and its findings placed, without parsing YAML or HTML.
+    serves: [N5, N13]
+    status: implemented
+    children:
+      - id: R36.1
+        title: The Page Uses Only The API
+        text: The page SHALL take everything it shows of a set from the API.
+        rationale: The API then cannot fall behind what readers see.
+        status: implemented
+      - id: R36.2
+        title: The API Described
+        text: The repository SHALL describe each resource of the API, with an example of its
+          answer.
+        verify: inspection
+        status: implemented

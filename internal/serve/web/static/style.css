@@ -1,0 +1,293 @@
+/* shall's own layer on top of Pure.css: black on white or white on black,
+   purple links, red problems, and grey for whatever is secondary. */
+
+:root {
+  --fg: #000;
+  --bg: #fff;
+  --muted: #666;
+  --line: #d6d6d6;
+  --soft: #f1f1f1;
+  --link: #6a1b9a;
+  --problem: #c62828;
+  --bar: 3rem;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --fg: #fff;
+    --bg: #000;
+    --muted: #a3a3a3;
+    --line: #333;
+    --soft: #161616;
+    --link: #ce93d8;
+    --problem: #ff6b6b;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --fg: #fff;
+  --bg: #000;
+  --muted: #a3a3a3;
+  --line: #333;
+  --soft: #161616;
+  --link: #ce93d8;
+  --problem: #ff6b6b;
+  color-scheme: dark;
+}
+
+/* The script keeps the reader's place itself; the browser's own anchoring
+   would fight it. */
+html { overflow-anchor: none; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+a { color: var(--link); }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+
+/* Pure's controls, in black and white. */
+
+.pure-button {
+  padding: 0.25em 0.8em;
+  border: 1px solid var(--fg);
+  border-radius: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.pure-button:hover,
+.pure-button:focus {
+  background: var(--fg);
+  background-image: none;
+  color: var(--bg);
+}
+
+.pure-form input[type="text"] {
+  padding: 0.25em 0.5em;
+  border: 1px solid var(--fg);
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.pure-form input[type="text"]:focus { border-color: var(--link); }
+
+/* The bar. */
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  height: var(--bar);
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--fg);
+  background: var(--bg);
+}
+
+.bar .home { color: var(--fg); font-weight: 700; text-decoration: none; }
+.bar .sep { color: var(--muted); }
+.bar .space { flex: 1; }
+.jump { display: flex; flex: 0 1 auto; gap: 0.3rem; min-width: 0; }
+.jump input { width: 11rem; min-width: 0; }
+.menu { display: none; }
+.bar > * { flex-shrink: 0; }
+.bar > .jump { flex-shrink: 1; }
+
+.notice:not(:empty) {
+  position: absolute;
+  top: calc(var(--bar) + 0.3rem);
+  right: 1rem;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--problem);
+  background: var(--bg);
+  color: var(--problem);
+}
+
+/* The outline beside the document. */
+
+body.document .layout {
+  display: grid;
+  grid-template-columns: 17rem minmax(0, 1fr);
+}
+
+.outline {
+  position: sticky;
+  top: var(--bar);
+  height: calc(100vh - var(--bar));
+  overflow-y: auto;
+  padding: 0.8rem 0;
+  border-right: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
+.outline .pure-menu-link {
+  padding: 0.2em 1em;
+  color: var(--fg);
+  white-space: normal;
+}
+
+.outline .pure-menu-list .pure-menu-list .pure-menu-link {
+  padding-left: 2em;
+  color: var(--muted);
+}
+
+.outline .pure-menu-link:hover,
+.outline .pure-menu-link:focus {
+  background: var(--soft);
+  color: var(--fg);
+}
+
+.outline .pure-menu-selected > .pure-menu-link {
+  box-shadow: inset 3px 0 var(--fg);
+  font-weight: 700;
+}
+
+.outline .pure-menu-link.broken { color: var(--problem); }
+
+main {
+  max-width: 52rem;
+  padding: 1rem 2rem 60vh;
+}
+
+main.alone { margin: 0 auto; }
+
+@media (max-width: 60em) {
+  .menu:not([hidden]) { display: inline-block; }
+  body.document .layout { display: block; }
+  main { padding: 1rem 1rem 60vh; }
+  .bar { gap: 0.4rem; padding: 0 0.5rem; }
+  .crumb { display: none; }
+  .jump input { width: 100%; }
+
+  .outline {
+    position: fixed;
+    inset: var(--bar) 0 0 0;
+    z-index: 2;
+    display: none;
+    height: auto;
+    border-right: none;
+    background: var(--bg);
+  }
+
+  body.outline-open .outline { display: block; }
+}
+
+/* The document. */
+
+h1 { font-size: 1.6rem; }
+
+.file {
+  padding: 0.4rem 0 0.8rem;
+  border-top: 1px solid var(--fg);
+  scroll-margin-top: calc(var(--bar) + 0.5rem);
+}
+
+.file > h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 0.5rem 0;
+  font-size: 1.35rem;
+}
+
+.file > h2 .fold {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.file > h2 .fold::before { content: "▸ "; color: var(--muted); }
+.file > h2 .fold[aria-expanded="true"]::before { content: "▾ "; }
+
+.counts, .path, .where, .written {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: normal;
+}
+
+.path { margin-left: auto; font-family: ui-monospace, monospace; }
+.statement { font-size: 1.15rem; }
+
+h3 {
+  margin: 1.4rem 0 0.4rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  scroll-margin-top: calc(var(--bar) + 0.5rem);
+}
+
+.item {
+  margin: 0.8rem 0;
+  padding: 0.2rem 0 0.2rem 0.9rem;
+  border-left: 2px solid var(--line);
+  scroll-margin-top: calc(var(--bar) + 0.5rem);
+}
+
+.item.target { border-left-color: var(--fg); background: var(--soft); }
+.item:focus { outline: none; }
+.item:focus-visible { outline: 2px solid var(--link); }
+.item > .head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
+.item > .head .ref, .item > .head .title { font-weight: 700; }
+.item .text { margin: 0.2rem 0; }
+.item .serves { margin: 0; color: var(--muted); font-size: 0.88rem; }
+.children { margin-left: 0.6rem; }
+
+.status { color: var(--muted); font-size: 0.85rem; }
+
+details.more { margin: 0.2rem 0; font-size: 0.92rem; }
+details.more > summary { color: var(--muted); cursor: pointer; }
+details.more > .fields { margin: 0.2rem 0 0 1rem; font-size: inherit; }
+
+.fields {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0 0.8rem;
+  margin: 0.3rem 0;
+  font-size: 0.92rem;
+}
+
+.fields dt { color: var(--muted); }
+.fields dd { margin: 0; }
+.fields ul { margin: 0; padding-left: 1.1rem; }
+
+.unknown { color: var(--problem); }
+.retired { color: var(--muted); }
+
+.findings { margin: 0.3rem 0; padding: 0; list-style: none; font-size: 0.9rem; }
+.finding { margin: 0.15rem 0; color: var(--problem); }
+.finding .severity { font-weight: 700; }
+.count.error, .count.warning, .missing { color: var(--problem); }
+
+.summary p { margin: 0.1rem 0 0.4rem; }
+.sets { padding-left: 1.2rem; }
+.sets li { margin: 0.3rem 0; }
+
+#preview {
+  position: absolute;
+  z-index: 4;
+  max-width: 28rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--fg);
+  background: var(--bg);
+  box-shadow: 4px 4px 0 var(--line);
+  color: var(--fg);
+  font-size: 0.9rem;
+}
+
+#preview p { margin: 0.2rem 0 0; }

@@ -112,28 +112,37 @@ requirements:
         text: The tool's source SHALL pass go vet without findings.
         status: implemented
   - id: R31
-    title: Pages From Templates
-    text: The server SHALL build each page, and each part it later sends into a page, as HTML
-      with the html/template package of Go's standard library.
-    rationale: Reading, checking and laying out a set then happen in Go, beside the checker's
-      code and tests, and the browser only shows the result. A TypeScript application was not
-      taken because it would bring Node.js back into development and add a build.
-    serves: [R19]
+    title: JSON To A Thin Page
+    text: The server SHALL send a set's content to its pages only as JSON, which the page's
+      JavaScript turns into the document.
+    rationale: Scripts, agents and the page then read one API, and every decision about a set
+      stays in Go, beside the checker's code and tests. Building the pages as HTML with
+      html/template was the first design, dropped because its answers served only a browser. A
+      TypeScript application was not taken because it would bring Node.js back into
+      development and add a build.
+    serves: [R19, R36]
     verify: inspection
-    status: approved
+    status: implemented
     children:
       - id: R31.1
         title: Thin Pages
-        text: The page's JavaScript SHALL only fetch parts of the page from the server, put them
-          in place and record the view in the page address.
-        rationale: Every decision about a set stays on the server, where the command line can
-          offer the same queries. htmx, which works the same way, was not taken because a few
-          dozen lines of script cover these interactions without a dependency.
-        status: approved
+        text: The page's JavaScript SHALL decide nothing about a set's content.
+        rationale: The script fetches JSON, builds the document from it and keeps the view; ids,
+          statuses, backlinks and the place of each finding come worked out from the server.
+          htmx was not taken because it swaps in HTML that the server renders, which this API
+          does not send.
+        status: implemented
       - id: R31.2
         title: Script As Written
         text: The page's JavaScript SHALL be served as written, with no library and no build step.
-        status: approved
+        status: implemented
+      - id: R31.3
+        title: Text Stays Text
+        text: The page's JavaScript SHALL put the text of a set into the page as text, never as
+          markup.
+        rationale: Nothing a file of a set holds can then add markup or script to the page.
+        serves: [R7]
+        status: implemented
   - id: R32
     title: Changes Polled And Pushed
     text: The server SHALL tell open pages about changed files over server-sent events.
@@ -141,7 +150,7 @@ requirements:
       were not taken because the page never needs to talk back.
     serves: [R29]
     verify: inspection
-    status: approved
+    status: implemented
     children:
       - id: R32.1
         title: Hidden Pages Let Go
@@ -151,7 +160,7 @@ requirements:
           the browser's limit. One stream shared across tabs through a shared worker was not taken
           for the code it adds to the page.
         serves: [R29.1]
-        status: approved
+        status: implemented
       - id: R32.2
         title: Polled Once A Second
         text: The server SHALL look for changed files about once a second, comparing each file's
@@ -161,9 +170,36 @@ requirements:
           catches a save that keeps a file's size within one second, on file systems that record
           times only to the second. fsnotify was not taken for being a dependency with platform
           quirks, such as editors that save by replacing a file.
-        status: approved
+        status: implemented
       - id: R32.3
         title: Files That Come And Go
         text: The server SHALL count a set's file or a manifest that appears or vanishes under
           the served directory as a change.
-        status: approved
+        status: implemented
+  - id: R35
+    title: Pure.css
+    text: The server SHALL style its pages with Pure.css, embedded in the binary as released,
+      and a stylesheet of its own on top.
+    rationale: Pure.css is a set of small, maintained CSS modules, 3.6 KB compressed, whose
+      menus give the outline its shape and which brings no colour scheme of its own. Pico was
+      not taken because it is no longer maintained; concrete.css, Simple.css and Water.css
+      because they style bare elements for a single column of prose, which the document's own
+      layout would override.
+    serves: [R31]
+    verify: inspection
+    status: implemented
+    links:
+      - url: https://github.com/pure-css/pure
+        title: Pure.css
+    children:
+      - id: R35.1
+        title: Two Colours
+        text: The server's own stylesheet SHALL colour links purple and problems red, and the
+          rest black, white or grey.
+        status: implemented
+      - id: R35.2
+        title: Licence Shipped
+        text: The server SHALL serve Pure.css's licence beside it.
+        rationale: The BSD licence asks that copies in binary form reproduce its notice.
+        verify: test
+        status: implemented

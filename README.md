@@ -57,6 +57,20 @@ under the directory, the current one by default.
 The exit status is 0 when nothing failed, 1 when the check found errors, and
 2 when the command was used wrongly.
 
+```text
+shall serve [-addr host:port] [directory]
+```
+
+`shall serve` shows each set under the directory as one document in the
+browser, at http://127.0.0.1:7180/ unless `-addr` gives another address.
+Chapters unfold as the reader reaches them, an outline beside the document
+leads to each, every id is a link, the checker's findings sit on the items
+they concern, and the page follows the files as they are saved. Unless given
+an address, it accepts connections only from this machine.
+
+The page is built from a JSON API that scripts and agents can read directly;
+[doc/api.md](doc/api.md) describes it.
+
 ## As a pre-commit hook
 
 In the `.pre-commit-config.yaml` of the repository holding the set:
