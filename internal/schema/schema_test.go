@@ -151,3 +151,88 @@ func TestFormatOnePointZeroIsOne(t *testing.T) {
 		t.Fatalf("findings = %+v, want none", got)
 	}
 }
+
+func TestRefusesMalformedSchemas(t *testing.T) {
+	t.Attr("verifies", "R21.1")
+	for _, s := range []string{
+		`{"$ref": 1}`,
+		`{"properties": []}`,
+		`{"properties": {"a": 1}}`,
+		`{"properties": {"a": {"maxItems": 1}}}`,
+		`{"items": {"maxItems": 1}}`,
+		`{"additionalProperties": 1}`,
+		`{"unevaluatedProperties": {"maxItems": 1}}`,
+		`{"anyOf": {}}`,
+		`{"anyOf": [1]}`,
+		`{"anyOf": [{"maxItems": 1}]}`,
+		`{"dependentRequired": 1}`,
+		`{"dependentRequired": {"a": "b"}}`,
+		`{"enum": "a"}`,
+		`{"const": {"a": 1}}`,
+		`{"pattern": 1}`,
+		`{"minLength": "1"}`,
+	} {
+		refused(t, s)
+	}
+	if _, err := Load(fstest.MapFS{"x.schema.json": {Data: []byte("not json")}}); err == nil || !strings.Contains(err.Error(), "x.schema.json") {
+		t.Errorf("a file that is no JSON: error = %v, want one naming the file", err)
+	}
+}
+
+// own loads one schema of a test's own and checks src against it.
+func own(t *testing.T, schema, src string) []finding.Finding {
+	t.Helper()
+	v, err := Load(fstest.MapFS{"t.schema.json": {Data: []byte(schema)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := tree.Parse([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v.Check("t.schema.json", "f.shall.yaml", n)
+}
+
+func TestNamesTheTypeItWanted(t *testing.T) {
+	t.Attr("verifies", "R3")
+	got := own(t, `{"type": "object", "properties": {
+		"m": {"type": "object"}, "l": {"type": "array"}, "s": {"type": "string"},
+		"i": {"type": "integer"}, "b": {"type": "boolean"}}}`,
+		"m: 1\nl: 1\ns: [x]\ni: one\nb: yes please\n")
+	for line, want := range map[int]string{1: `field "m" should be a mapping`, 2: `field "l" should be a list`, 3: `field "s" should be text`, 4: `field "i" should be a whole number`, 5: `field "b" should be true or false`} {
+		expect(t, got, line, "", fieldOf(want), want)
+	}
+	if got := own(t, `{"type": "object"}`, "[1]\n"); len(got) != 1 || got[0].Message != "the file should be a mapping" {
+		t.Errorf("a file of the wrong shape = %+v, want that the file should be a mapping", got)
+	}
+	if got := own(t, `{"type": "object", "properties": {"i": {"type": "integer"}, "b": {"type": "boolean"}}}`, "i: 3\nb: true\n"); len(got) != 0 {
+		t.Errorf("values of the right type = %+v, want no findings", got)
+	}
+}
+
+func fieldOf(message string) string {
+	_, rest, _ := strings.Cut(message, `"`)
+	name, _, _ := strings.Cut(rest, `"`)
+	return name
+}
+
+func TestConstantsLengthsAndNestedFields(t *testing.T) {
+	t.Attr("verifies", "R3")
+	got := own(t, `{"type": "object", "properties": {
+		"c": {"const": 1},
+		"n": {"type": "string", "minLength": 3},
+		"o": {"type": "object", "properties": {"a": {"type": "string"}}, "unevaluatedProperties": false}}}`,
+		"c: 2\nn: ab\no:\n  a: x\n  z: y\n")
+	expect(t, got, 1, "", "c", `field "c" must be 1, not 2`)
+	expect(t, got, 2, "", "n", `field "n" needs at least 3 characters`)
+	expect(t, got, 5, "", "z", `field "z" is not defined here`)
+}
+
+func TestCheckingAgainstASchemaNotLoadedPanics(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("checking against a schema that is not loaded did not panic")
+		}
+	}()
+	load(t).Check("missing.schema.json", "f.shall.yaml", &tree.Node{Kind: tree.Map})
+}

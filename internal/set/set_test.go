@@ -40,10 +40,10 @@ func TestManifestsAreFoundBelowTheDirectory(t *testing.T) {
 	touch(t, root, "shall.yaml", "a/b/shall.yaml", ".git/shall.yaml", "a/shall.yml", "a/x.shall.yaml")
 	found, unreadable, err := Manifests(root)
 	if err != nil || len(unreadable) != 0 {
-		t.Fatalf("err = %v, unreadable = %v", err, unreadable)
+		t.Fatalf("err = %v, unreadable = %v; want neither", err, unreadable)
 	}
 	if got := rel(t, root, found); !slices.Equal(got, []string{"a/b/shall.yaml", "shall.yaml"}) {
-		t.Fatalf("manifests = %v", got)
+		t.Fatalf("manifests = %v, want a/b/shall.yaml and shall.yaml", got)
 	}
 }
 
@@ -55,7 +55,7 @@ func TestFilesEndInTheSuffix(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := rel(t, root, found); !slices.Equal(got, []string{"c/one.shall.yaml", "mission.shall.yaml"}) {
-		t.Fatalf("files = %v", got)
+		t.Fatalf("files = %v, want c/one.shall.yaml and mission.shall.yaml", got)
 	}
 }
 
@@ -76,7 +76,7 @@ func TestUnreadableDirectoriesDoNotStopTheWalk(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := rel(t, root, found); !slices.Equal(got, []string{"a/shall.yaml"}) {
-		t.Fatalf("manifests = %v", got)
+		t.Fatalf("manifests = %v, want a/shall.yaml alone", got)
 	}
 	if len(unreadable) != 1 || unreadable[0].Path != locked {
 		t.Fatalf("unreadable = %v, want %s", unreadable, locked)

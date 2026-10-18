@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"shall/internal/serve"
+	"shall/internal/testfile"
 )
 
 const manifest = "name: x\nformat: 1\n"
@@ -25,21 +27,6 @@ stakeholders:
 needs:
   - {id: N1, title: A, text: t, stakeholder: S1, serves: [mission], status: hypothesis}
 `
-
-func write(t *testing.T, files map[string]string) string {
-	t.Helper()
-	dir := t.TempDir()
-	for name, src := range files {
-		path := filepath.Join(dir, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return dir
-}
 
 func shall(t *testing.T, args ...string) (int, string) {
 	t.Helper()
@@ -73,7 +60,7 @@ func jsonReport(t *testing.T, dir string) (int, report) {
 
 func TestFindsEverySetUnderTheDirectory(t *testing.T) {
 	t.Attr("verifies", "R1")
-	dir := write(t, map[string]string{
+	dir := testfile.Write(t, map[string]string{
 		"a/shall.yaml":         manifest,
 		"a/mission.shall.yaml": mission,
 		"b/c/shall.yaml":       manifest,
@@ -86,23 +73,23 @@ func TestFindsEverySetUnderTheDirectory(t *testing.T) {
 
 func TestNoSetIsAnError(t *testing.T) {
 	t.Attr("verifies", "R1")
-	code, out := shall(t, "check", write(t, map[string]string{"x.txt": ""}))
+	code, out := shall(t, "check", testfile.Write(t, map[string]string{"x.txt": ""}))
 	if code != 1 || !strings.Contains(out, "no shall.yaml") {
-		t.Fatalf("exit %d, output %q", code, out)
+		t.Fatalf("exit %d, output %q; want 1 and that there is no shall.yaml", code, out)
 	}
 }
 
 func TestUnknownFormatIsRefused(t *testing.T) {
 	t.Attr("verifies", "R2.1")
-	_, r := jsonReport(t, write(t, map[string]string{"shall.yaml": "name: x\nformat: 7\n"}))
+	_, r := jsonReport(t, testfile.Write(t, map[string]string{"shall.yaml": "name: x\nformat: 7\n"}))
 	if r.Errors != 1 || !strings.Contains(r.Findings[0].Message, "format version 7") {
-		t.Fatalf("report = %+v", r)
+		t.Fatalf("report = %+v, want one error naming format version 7", r)
 	}
 }
 
 func TestCheckingGoesOnPastErrors(t *testing.T) {
 	t.Attr("verifies", "R2.2")
-	_, r := jsonReport(t, write(t, map[string]string{
+	_, r := jsonReport(t, testfile.Write(t, map[string]string{
 		"shall.yaml":         manifest,
 		"mission.shall.yaml": mission,
 		"a.shall.yaml":       "title: A\nrequirements: [\n",
@@ -119,7 +106,7 @@ func TestCheckingGoesOnPastErrors(t *testing.T) {
 
 func TestFindingsLocateThemselves(t *testing.T) {
 	t.Attr("verifies", "R3")
-	_, r := jsonReport(t, write(t, map[string]string{
+	_, r := jsonReport(t, testfile.Write(t, map[string]string{
 		"shall.yaml":         manifest,
 		"mission.shall.yaml": mission,
 		"c.shall.yaml":       "title: C\nrequirements:\n  - id: R1\n    title: X\n    text: The tool SHALL work.\n    serves: [N1]\n    status: done\n",
@@ -135,7 +122,7 @@ func TestFindingsLocateThemselves(t *testing.T) {
 
 func TestFindingsAsText(t *testing.T) {
 	t.Attr("verifies", "R3")
-	_, out := shall(t, "check", write(t, map[string]string{
+	_, out := shall(t, "check", testfile.Write(t, map[string]string{
 		"shall.yaml":         manifest,
 		"mission.shall.yaml": mission,
 		"c.shall.yaml":       "title: C\nrequirements:\n  - {id: R1, title: X, text: The tool SHALL work., serves: [N1], status: done}\n",
@@ -148,7 +135,7 @@ func TestFindingsAsText(t *testing.T) {
 
 func TestFindingsAsJSON(t *testing.T) {
 	t.Attr("verifies", "R4")
-	code, r := jsonReport(t, write(t, map[string]string{"shall.yaml": manifest, "mission.shall.yaml": mission}))
+	code, r := jsonReport(t, testfile.Write(t, map[string]string{"shall.yaml": manifest, "mission.shall.yaml": mission}))
 	if code != 0 || r.Errors != 0 || r.Findings == nil {
 		t.Fatalf("exit %d, report %+v; want a passing, empty report", code, r)
 	}
@@ -156,7 +143,7 @@ func TestFindingsAsJSON(t *testing.T) {
 
 func TestErrorsFailTheRun(t *testing.T) {
 	t.Attr("verifies", "R5")
-	code, _ := shall(t, "check", write(t, map[string]string{"shall.yaml": manifest}))
+	code, _ := shall(t, "check", testfile.Write(t, map[string]string{"shall.yaml": manifest}))
 	if code != 1 {
 		t.Fatalf("exit %d, want 1", code)
 	}
@@ -165,7 +152,7 @@ func TestErrorsFailTheRun(t *testing.T) {
 func TestWarningsFailOnlyWhenAsked(t *testing.T) {
 	t.Attr("verifies", "R5.1")
 	t.Attr("verifies", "R5.2")
-	dir := write(t, map[string]string{
+	dir := testfile.Write(t, map[string]string{
 		"shall.yaml":         manifest,
 		"mission.shall.yaml": mission,
 		"c.shall.yaml":       "title: C\nrequirements:\n  - {id: R1, title: X, text: Tool SHALL work., serves: [N1], status: draft}\n",
@@ -187,7 +174,7 @@ func TestShallsOwnSetHasNoErrors(t *testing.T) {
 		}
 	}
 	if code != 0 {
-		t.Fatalf("exit %d", code)
+		t.Fatalf("exit %d, want 0", code)
 	}
 }
 
@@ -218,7 +205,7 @@ func (b *lockedBuffer) String() string {
 func TestServeSaysWhereItServes(t *testing.T) {
 	t.Attr("verifies", "R25.1")
 	t.Attr("verifies", "R25.3")
-	dir := write(t, map[string]string{"shall.yaml": manifest, "mission.shall.yaml": mission})
+	dir := testfile.Write(t, map[string]string{"shall.yaml": manifest, "mission.shall.yaml": mission})
 	ctx, cancel := context.WithCancel(t.Context())
 	var out lockedBuffer
 	done := make(chan int)
@@ -265,5 +252,116 @@ func TestServeRefusesATakenAddress(t *testing.T) {
 	defer ln.Close()
 	if code, out := shall(t, "serve", "-addr", ln.Addr().String(), t.TempDir()); code != 1 || !strings.Contains(out, "shall:") {
 		t.Errorf("exit %d %q, want 1 with the reason", code, out)
+	}
+}
+
+func TestWrongUseIsRefused(t *testing.T) {
+	dir := t.TempDir()
+	for _, args := range [][]string{
+		{"nonsense"},
+		{"check", "-no-such-flag"},
+		{"check", dir, dir},
+		{"serve", "-no-such-flag"},
+		{"serve", dir, dir},
+	} {
+		if code, out := shall(t, args...); code != 2 || !strings.Contains(out, "usage") && !strings.Contains(out, "flag provided but not defined") {
+			t.Errorf("shall %v = exit %d %q, want 2 with the usage", args, code, out)
+		}
+	}
+}
+
+func TestCheckingADirectoryThatIsNotThere(t *testing.T) {
+	if code, out := shall(t, "check", filepath.Join(t.TempDir(), "nowhere")); code != 2 || !strings.Contains(out, "shall:") {
+		t.Errorf("exit %d %q, want 2 with the reason", code, out)
+	}
+}
+
+func TestAnAddressOnEveryInterfaceIsOpenedOnLocalhost(t *testing.T) {
+	t.Attr("verifies", "R25.3")
+	for _, c := range []struct {
+		addr net.Addr
+		want string
+	}{
+		{&net.TCPAddr{IP: net.IPv6unspecified, Port: 7180}, "localhost:7180"},
+		{&net.TCPAddr{IP: net.IPv4zero, Port: 7180}, "localhost:7180"},
+		{&net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 7180}, "127.0.0.1:7180"},
+		{&net.UnixAddr{Name: "/tmp/x", Net: "unix"}, "/tmp/x"},
+	} {
+		if got := openable(c.addr); got != c.want {
+			t.Errorf("openable(%v) = %s, want %s", c.addr, got, c.want)
+		}
+	}
+}
+
+func TestTheCurrentDirectoryByDefault(t *testing.T) {
+	t.Attr("verifies", "R1")
+	t.Chdir(testfile.Write(t, map[string]string{"shall.yaml": manifest, "mission.shall.yaml": mission}))
+	if code, out := shall(t, "check"); code != 0 || !strings.Contains(out, "0 errors, 0 warnings") {
+		t.Errorf("exit %d %q, want the current directory checked clean", code, out)
+	}
+}
+
+func TestOneHookToAdopt(t *testing.T) {
+	t.Attr("verifies", "R6")
+	if testing.Short() {
+		t.Skip("builds the hook with pre-commit")
+	}
+	preCommit, err := exec.LookPath("pre-commit")
+	if err != nil {
+		t.Skip("pre-commit is not installed")
+	}
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git is not installed")
+	}
+	goTool, err := exec.LookPath("go")
+	if err != nil {
+		t.Skip("the go command is not on the path")
+	}
+	// The hook builds against this machine's module cache, with downloads
+	// off, so the test needs no network; pre-commit and git keep their state
+	// in the test's own directory.
+	cache, err := exec.Command(goTool, "env", "GOMODCACHE").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dir, err := exec.Command(goTool, "list", "-m", "-f", "{{.Dir}}", "github.com/goccy/go-yaml").Output(); err != nil || strings.TrimSpace(string(dir)) == "" {
+		t.Skip("the module cache lacks goccy/go-yaml; build shall once first")
+	}
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	gitConfig := filepath.Join(home, "gitconfig")
+	if err := os.WriteFile(gitConfig, []byte("[user]\n\tname = Test\n\temail = test@example.com\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	env := append(os.Environ(),
+		"GOMODCACHE="+strings.TrimSpace(string(cache)), "GOPROXY=off", "GOFLAGS=",
+		"PRE_COMMIT_HOME="+filepath.Join(home, "pre-commit"),
+		"GIT_CONFIG_GLOBAL="+gitConfig, "GIT_CONFIG_NOSYSTEM=1")
+	dir := testfile.Write(t, map[string]string{"shall.yaml": manifest, "mission.shall.yaml": mission})
+	in := func(name string, args ...string) (string, error) {
+		cmd := exec.Command(name, args...)
+		cmd.Dir, cmd.Env = dir, env
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	if out, err := in(git, "init", "-q"); err != nil {
+		t.Fatal(err, out)
+	}
+	if out, err := in(git, "add", "."); err != nil {
+		t.Fatal(err, out)
+	}
+	if out, err := in(preCommit, "try-repo", repo, "shall-check", "--all-files"); err != nil {
+		t.Fatalf("the hook failed on a valid set: %v\n%s", err, out)
+	}
+	testfile.WriteFile(t, filepath.Join(dir, "c.shall.yaml"), "title: C\nrequirements:\n  - {id: R1, title: A, text: no promise, serves: [N1], status: draft}\n")
+	if out, err := in(git, "add", "."); err != nil {
+		t.Fatal(err, out)
+	}
+	if out, err := in(preCommit, "try-repo", repo, "shall-check", "--all-files"); err == nil || !strings.Contains(out, "states no SHALL") {
+		t.Errorf("the hook passed a set with an error: %v\n%s", err, out)
 	}
 }

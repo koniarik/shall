@@ -284,16 +284,6 @@ func (s *Set) RetiredWith(id string) *Retired {
 // NamedBy returns every reference to id from an item, in reading order.
 func (s *Set) NamedBy(id string) []Ref { return s.named[id] }
 
-// Mission returns the set's first mission file that could be read, or nil.
-func (s *Set) Mission() *File {
-	for _, f := range s.Files {
-		if f.Mission && f.Tree != nil {
-			return f
-		}
-	}
-	return nil
-}
-
 // Ranking returns the objective ids the mission file ranks, highest first.
 func (s *Set) Ranking() []Ref {
 	var out []Ref

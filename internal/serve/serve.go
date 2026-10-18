@@ -34,6 +34,11 @@ const DefaultAddr = "127.0.0.1:7180"
 // pollEvery is how often the server looks for changed files.
 const pollEvery = time.Second
 
+// keepAlive is how often a quiet stream of versions says it is still there,
+// so that proxies and browsers keep it open. A test shortens it, so no test
+// of this package may run in parallel with that one.
+var keepAlive = 30 * time.Second
+
 var (
 	//go:embed web/index.html
 	indexPage []byte
@@ -270,7 +275,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	if send(s.current().version) != nil {
 		return
 	}
-	keep := time.NewTicker(30 * time.Second)
+	keep := time.NewTicker(keepAlive)
 	defer keep.Stop()
 	for {
 		select {

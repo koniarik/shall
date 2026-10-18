@@ -148,7 +148,7 @@ func TestDependenciesCannotBeRead(t *testing.T) {
 	expect(t, got, finding.Error, "", `set "company" cannot be read`)
 	for _, f := range got {
 		if f.ID == "R1" {
-			t.Errorf("unexpected finding on R1: %+v", f)
+			t.Errorf("finding on R1 = %+v, want none", f)
 		}
 	}
 }
@@ -182,7 +182,7 @@ func TestRequirements(t *testing.T) {
 	expect(t, got, finding.Error, "R5.1", `"status" is missing`)
 	for _, f := range got {
 		if f.ID == "R6.1" {
-			t.Errorf("a child of a waived requirement needs no status: %+v", f)
+			t.Errorf("finding on R6.1 = %+v, want none: a child of a waived requirement needs no status", f)
 		}
 	}
 }
@@ -202,7 +202,7 @@ retired:
 	expect(t, got, finding.Warning, "R2", "R1.1 is retired")
 	for _, f := range got {
 		if f.Severity == finding.Error {
-			t.Errorf("unexpected error: %+v", f)
+			t.Errorf("error = %+v, want none", f)
 		}
 	}
 }
@@ -238,4 +238,27 @@ func TestKeywordsCountAsWholeWords(t *testing.T) {
 	t.Attr("verifies", "R2")
 	none(t, run(t, "name: x\nformat: 1\n", chapter(
 		"  - {id: R1, title: A, text: The SHALLOW pool SHALL NOT overflow., serves: [N1], status: draft}\n")))
+}
+
+func TestTopLevelRetiredListsHoldTopLevelIdsOfTheirKinds(t *testing.T) {
+	t.Attr("verifies", "R2")
+	got := run(t, "name: x\nformat: 1\n", map[string]string{
+		"mission.shall.yaml": mission + "retired:\n  - {id: R5, title: Wrong kind}\n",
+		"c.shall.yaml":       "title: C\nrequirements: []\nretired:\n  - {id: R6.1, title: A child}\n  - {id: N7, title: Wrong kind}\n",
+	})
+	expect(t, got, finding.Error, "R5", "this list holds top-level ids of kinds OSN")
+	expect(t, got, finding.Error, "R6.1", "this list holds top-level ids of kinds R")
+	expect(t, got, finding.Error, "N7", "this list holds top-level ids of kinds R")
+}
+
+func TestATextThatIsNoTextIsLeftToTheSchema(t *testing.T) {
+	t.Attr("verifies", "R2.2")
+	got := run(t, "name: x\nformat: 1\n", chapter("  - {id: R1, title: A, text: [not, text], serves: [N1], status: draft}\n"+
+		"  - {id: R2, title: B, text: The tool SHALL work., status: draft}\n"))
+	for _, f := range got {
+		if f.Field == "text" {
+			t.Errorf("the rules judged a text that is no text: %+v; want that left to the schema", f)
+		}
+	}
+	expect(t, got, finding.Warning, "R2", "the requirement serves nothing")
 }
