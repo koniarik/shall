@@ -3,7 +3,8 @@ title: Design
 requirements:
   - id: R19
     title: A Single Go Binary
-    text: The tool SHALL be one binary, written in Go, that runs with nothing else installed.
+    text: The tool SHALL be one binary, written in Go, that runs with nothing else installed but
+      git, which diff asks for the files at a ref.
     rationale: Adopters in a department of embedded engineers then need no runtime, and the same
       binary serves developers, pre-commit and CI. TypeScript was not taken because every machine
       would need Node.js, which refuses to run TypeScript inside node_modules, and npm is
@@ -205,3 +206,21 @@ requirements:
         rationale: The BSD licence asks that copies in binary form reproduce its notice.
         verify: test
         status: implemented
+  - id: R41
+    title: Refs Read Through Git
+    text: The tool SHALL read the files of a ref from an archive of the ref's tree that git
+      makes, and check them as it checks the files on disk.
+    rationale: Every machine that holds a set in git has git, and an archive gives the files
+      exactly as committed. go-git was not taken for being a large dependency; reading git's
+      object store with code of its own for being a large piece of code.
+    serves: [R37]
+    verify: inspection
+    status: approved
+  - id: R42
+    title: Words Compared By Code Of Its Own
+    text: The tool SHALL find the changed words of a text with a comparison of its own.
+    rationale: A longest common subsequence over the words takes a few dozen lines, where a diff
+      library would be a dependency.
+    serves: [R40.1]
+    verify: inspection
+    status: approved

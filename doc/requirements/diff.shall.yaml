@@ -1,0 +1,122 @@
+---
+title: Diff
+requirements:
+  - id: R37
+    title: Sets Compared Between Refs
+    text: When asked to diff, the tool SHALL compare every set under the given directory, the
+      current one by default, as it stands at two git refs.
+    rationale: A reviewer judges a change by what it does to the statements, not by the lines
+      of YAML it touches.
+    serves: [N2, N5]
+    status: approved
+    children:
+      - id: R37.1
+        title: Base And Head From The Command Line
+        text: The tool SHALL take the two refs from its command line, the base defaulting to
+          HEAD and the head to the working tree.
+        rationale: A plain diff then shows the changes not yet committed, as git diff does, and
+          two refs compare without touching the working tree.
+        status: approved
+      - id: R37.2
+        title: The Working Tree As It Stands
+        text: Where the head is the working tree, the tool SHALL read the files as they stand on
+          disk, those git does not track included.
+        rationale: A new chapter is part of the change before anyone adds it to git.
+        status: approved
+      - id: R37.3
+        title: The Same Place In Each Ref
+        text: The tool SHALL read the given directory at the same place in the repository in
+          each ref.
+        status: approved
+      - id: R37.4
+        title: When Git Cannot Answer
+        text: If git cannot give a ref, then the tool SHALL say why and exit with status 2.
+        status: approved
+      - id: R37.5
+        title: Changed Or Not In The Exit Status
+        text: The tool SHALL exit with status 0 when nothing changed between the refs, and 1 when
+          something did.
+        rationale: Scripts then tell a change from no change as they do with diff.
+        status: approved
+  - id: R38
+    title: Items Compared By Id
+    text: The tool SHALL match items between the refs by their id, and report each item added,
+      removed, retired or changed.
+    rationale: Ids stay with their statement wherever it moves, so they show what happened to
+      it.
+    serves: [N2]
+    status: approved
+    children:
+      - id: R38.1
+        title: Fields As Written
+        text: The tool SHALL report each field an item writes whose value differs between the
+          refs, with its old and new value.
+        rationale: An inherited value changes with the parent's field, where it is reported.
+        status: approved
+      - id: R38.2
+        title: Effective Status
+        text: When a requirement's effective status differs between the refs, the tool SHALL
+          report it, even where the requirement's own fields are the same.
+        rationale: A child going back to draft lowers its parent, which a reviewer wants to see
+          on the parent.
+        status: approved
+      - id: R38.3
+        title: Moved Between Chapters
+        text: When an item's file differs between the refs, the tool SHALL report the file it
+          moved from.
+        status: approved
+      - id: R38.4
+        title: Order Is No Change
+        text: The tool SHALL NOT report an item that only moved within its chapter.
+        rationale: The statement is the same wherever it stands in the chapter.
+        status: approved
+  - id: R39
+    title: Sets, Chapters And Findings Compared
+    text: The tool SHALL report the sets, chapters and set-wide fields that differ between the
+      refs.
+    serves: [N2]
+    status: approved
+    children:
+      - id: R39.1
+        title: Sets By Manifest
+        text: The tool SHALL match sets between the refs by the path of their manifest.
+        rationale: A set renamed in its manifest is then a change of name, not a set gone and
+          another come.
+        status: approved
+      - id: R39.2
+        title: Set-Wide Fields
+        text: The tool SHALL report each change to a set's mission statement, its ranking, and
+          its manifest's name, path and depends.
+        rationale: A changed rev under depends is an upstream set upgraded.
+        status: approved
+      - id: R39.3
+        title: Chapters
+        text: The tool SHALL report each chapter added, removed or retitled.
+        status: approved
+      - id: R39.4
+        title: Findings Gained And Lost
+        text: The tool SHALL report the checker's findings that are new at the head and those
+          that are gone.
+        rationale: A reviewer then sees what a change breaks or mends without checking both
+          sides.
+        status: approved
+  - id: R40
+    title: A Diff To Read
+    text: The tool SHALL report a diff as text, grouped by set and then by file, with its totals
+      last.
+    serves: [N2]
+    status: approved
+    children:
+      - id: R40.1
+        title: Changed Words Marked
+        text: The tool SHALL show a changed text by its changed part, the removed words marked
+          [-like this-] and the added ones {+like this+}.
+        rationale: The marks read without colour and paste into a review, as git diff's word
+          diff does.
+        status: approved
+      - id: R40.2
+        title: A Diff For Scripts
+        text: Where JSON output is requested, the tool SHALL print the diff as one JSON document
+          holding all the text does, with each changed value whole.
+        serves: [N5]
+        status: approved
