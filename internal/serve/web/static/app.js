@@ -602,25 +602,43 @@ document.addEventListener('toggle', (e) => {
   if (e.target.matches?.('details.more')) record('details', e.target.dataset.id, e.target.open);
 }, true);
 
-// The outline marks the chapter at the top of the screen and keeps its entry
-// in sight.
+// The outline marks the chapter at the top of the screen, and the part of it
+// the reader is in: a top-level item of a chapter, or a part of the mission.
+// It keeps the marked entry in sight.
+
+// lastAbove returns the last of els whose top is above edge.
+function lastAbove(els, edge) {
+  return els.findLast((el) => el.getBoundingClientRect().top <= edge);
+}
+
+function markEntry(li, on) {
+  li.classList.toggle('pure-menu-selected', on);
+  const a = li.querySelector(':scope > a');
+  if (on) a.setAttribute('aria-current', 'location');
+  else a.removeAttribute('aria-current');
+}
 
 function mark() {
   const edge = (document.querySelector('.bar')?.getBoundingClientRect().bottom ?? 0) + 8;
   const sections = [...main.querySelectorAll('section.file')];
-  const current = sections.findLast((s) => s.getBoundingClientRect().top <= edge) ?? sections[0];
+  const current = lastAbove(sections, edge) ?? sections[0];
+  const part = current && lastAbove([...current.querySelectorAll(':scope > div > article.item, :scope > div > h3')], edge);
+  let shown = null;
   for (const li of outline.querySelectorAll('#outline-menu > ul > li')) {
     const on = li.dataset.for === current?.id;
-    li.classList.toggle('pure-menu-selected', on);
-    const a = li.querySelector(':scope > a');
-    if (on) {
-      a.setAttribute('aria-current', 'location');
-      const r = a.getBoundingClientRect();
-      const n = outline.getBoundingClientRect();
-      if (r.top < n.top || r.bottom > n.bottom) outline.scrollTop += r.top - n.top - n.height / 3;
-    } else {
-      a.removeAttribute('aria-current');
+    markEntry(li, on);
+    if (on) shown = li.querySelector(':scope > a');
+    for (const sub of li.querySelectorAll(':scope > ul > li')) {
+      const a = sub.querySelector(':scope > a');
+      const subOn = on && Boolean(part) && (a.dataset.item ?? a.dataset.scroll) === part.id;
+      markEntry(sub, subOn);
+      if (subOn) shown = a;
     }
+  }
+  if (shown) {
+    const r = shown.getBoundingClientRect();
+    const n = outline.getBoundingClientRect();
+    if (r.top < n.top || r.bottom > n.bottom) outline.scrollTop += r.top - n.top - n.height / 3;
   }
 }
 

@@ -140,7 +140,8 @@ requirements:
             status: implemented
           - id: R26.11.2
             title: Where The Reader Is
-            text: The server SHALL mark in the outline the chapter at the top of the screen.
+            text: The server SHALL mark in the outline the chapter at the top of the screen, and
+              the part of it the reader is in.
             status: implemented
           - id: R26.11.3
             title: Outline On Narrow Screens

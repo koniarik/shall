@@ -171,8 +171,10 @@ body.document .layout {
   color: var(--fg);
 }
 
-.outline .pure-menu-selected > .pure-menu-link {
+.outline .pure-menu-selected > .pure-menu-link,
+.outline .pure-menu-list .pure-menu-list .pure-menu-selected > .pure-menu-link {
   box-shadow: inset 3px 0 var(--fg);
+  color: var(--fg);
   font-weight: 700;
 }
 
@@ -197,6 +199,7 @@ main.alone { margin: 0 auto; }
   .bar { gap: 0.4rem; padding: 0 0.5rem; }
   .crumb { display: none; }
   .bar .filter:not([hidden]) { display: none; }
+  .file:not(.broken) > h2 .path { display: none; }
   .outline .filter { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0 1rem 0.8rem; }
   .jump input { width: 100%; }
 
