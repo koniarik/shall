@@ -193,9 +193,11 @@ requirements:
         title: Pure.css
     children:
       - id: R35.1
-        title: Two Colours
-        text: The server's own stylesheet SHALL colour links purple and problems red, and the
-          rest black, white or grey.
+        title: Few Colours
+        text: The server's own stylesheet SHALL colour links purple, errors red and warnings
+          amber, and the rest black, white or grey.
+        rationale: Amber tells a warning from an error at a glance, and stays readable on
+          white as on black; the words error and warning still say it without colour.
         status: implemented
       - id: R35.2
         title: Licence Shipped

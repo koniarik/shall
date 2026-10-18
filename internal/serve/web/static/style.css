@@ -1,5 +1,6 @@
 /* shall's own layer on top of Pure.css: black on white or white on black,
-   purple links, red problems, and grey for whatever is secondary. */
+   purple links, red errors, amber warnings, and grey for whatever is
+   secondary. */
 
 :root {
   --fg: #000;
@@ -9,6 +10,7 @@
   --soft: #f1f1f1;
   --link: #6a1b9a;
   --problem: #c62828;
+  --warning: #b45309;
   --bar: 3rem;
   color-scheme: light;
 }
@@ -22,6 +24,7 @@
     --soft: #161616;
     --link: #ce93d8;
     --problem: #ff6b6b;
+    --warning: #fbbf24;
     color-scheme: dark;
   }
 }
@@ -34,6 +37,7 @@
   --soft: #161616;
   --link: #ce93d8;
   --problem: #ff6b6b;
+  --warning: #fbbf24;
   color-scheme: dark;
 }
 
@@ -293,7 +297,8 @@ details.more > .fields { margin: 0.2rem 0 0 1rem; font-size: inherit; }
 .findings { margin: 0.3rem 0; padding: 0; list-style: none; font-size: 0.9rem; }
 .finding { margin: 0.15rem 0; color: var(--problem); }
 .finding .severity { font-weight: 700; }
-.count.error, .count.warning, .missing { color: var(--problem); }
+.finding.warning, .count.warning { color: var(--warning); }
+.count.error, .missing { color: var(--problem); }
 
 .summary p { margin: 0.1rem 0 0.4rem; }
 .sets { padding-left: 1.2rem; }
