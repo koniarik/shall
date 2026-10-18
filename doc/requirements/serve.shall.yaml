@@ -47,6 +47,14 @@ requirements:
         rationale: Keeping set names unique is up to the sets' authors. The server cannot tell
           which of the two an address means, so it points out the clash.
         status: implemented
+      - id: R25.6
+        title: Sets Compared
+        text: The server SHALL show on its start page, for each set, how many of its
+          requirements stand at each effective status.
+        rationale: A department manager then compares the sets of several products at a
+          glance, in the same terms for each.
+        serves: [N6]
+        status: implemented
   - id: R26
     title: One Document Per Set
     text: The server SHALL show each set as one document, its mission file first and then its
@@ -161,6 +169,20 @@ requirements:
           it in a new tab.
         rationale: The document then stays where the reader left it.
         status: implemented
+      - id: R26.15
+        title: Filtered By Status
+        text: While the reader has chosen effective statuses, the server SHALL show of the
+          requirements only those at a chosen status, and their parents as context.
+        rationale: An implementer then sees what is still in draft or not yet verified without
+          reading every chapter. Chapters with no requirement at a chosen status stay folded.
+        status: implemented
+        children:
+          - id: R26.15.1
+            title: The Filter Gives Way
+            text: When the reader goes to an item that the filter hides, the server SHALL drop
+              the filter.
+            rationale: A link or a search result then always reaches its item.
+            status: implemented
   - id: R27
     title: Ids Are Links
     text: The server SHALL show every id that a field names, and that names an item the server

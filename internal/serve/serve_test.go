@@ -173,6 +173,17 @@ func TestStartPageListsEverySetByName(t *testing.T) {
 	}
 }
 
+func TestSetsCompared(t *testing.T) {
+	t.Attr("verifies", "R25.6")
+	root := write(t, coffee())
+	var a setsAnswer
+	answer(t, root, "/api/sets", http.StatusOK, &a)
+	want := statusCounts{Total: 5, Draft: 2, Approved: 1, Implemented: 2}
+	if len(a.Sets) != 1 || a.Sets[0].Requirements != want {
+		t.Errorf("requirements = %+v, want %+v", a.Sets[0].Requirements, want)
+	}
+}
+
 func TestClashingNamesAreServedUnderNeither(t *testing.T) {
 	t.Attr("verifies", "R25.5")
 	root := write(t, map[string]string{
@@ -303,6 +314,46 @@ func TestOneDocumentInOrder(t *testing.T) {
 	}
 }
 
+func TestFilteredByStatus(t *testing.T) {
+	t.Attr("verifies", "R26.15")
+	root := write(t, with(coffee(), map[string]string{
+		"c-mixed.shall.yaml": "title: Mixed\nrequirements:\n  - id: R6\n    title: A\n    text: The machine SHALL hum.\n    serves: [N1]\n    status: approved\n    children:\n      - {id: R6.1, title: B, text: The machine SHALL hum low., status: approved}\n      - {id: R6.2, title: C, text: The machine SHALL hum softly., status: draft}\n",
+	}))
+	var shape func([]*itemJSON) string
+	shape = func(items []*itemJSON) string {
+		var out []string
+		for _, it := range items {
+			s := it.ID
+			if it.Context {
+				s += "(context)"
+			}
+			if len(it.Children) > 0 {
+				s += "[" + shape(it.Children) + "]"
+			}
+			out = append(out, s)
+		}
+		return strings.Join(out, " ")
+	}
+	for _, c := range []struct{ path, want string }{
+		{"b-tank.shall.yaml?status=approved", "R2"},
+		{"b-tank.shall.yaml?status=implemented", "R1[R1.1]"},
+		{"b-tank.shall.yaml?status=approved&status=implemented", "R1[R1.1] R2"},
+		{"b-tank.shall.yaml?status=draft", ""},
+		{"c-mixed.shall.yaml?status=approved", "R6(context)[R6.1]"},
+		{"c-mixed.shall.yaml?status=draft", "R6[R6.2]"},
+		{"c-mixed.shall.yaml", "R6[R6.1 R6.2]"},
+	} {
+		a := fileAnswer{fileJSON: &fileJSON{}}
+		answer(t, root, "/api/sets/coffee/files/"+c.path, http.StatusOK, &a)
+		if got := shape(a.Requirements); got != c.want {
+			t.Errorf("%s = %q, want %q", c.path, got, c.want)
+		}
+	}
+	if a := setOf(t, root); a.Requirements != (statusCounts{Total: 8, Draft: 4, Approved: 2, Implemented: 2}) {
+		t.Errorf("set requirements = %+v", a.Requirements)
+	}
+}
+
 func TestStatementsShown(t *testing.T) {
 	t.Attr("verifies", "R26.1")
 	root := write(t, coffee())
@@ -318,7 +369,9 @@ func TestChaptersComeWithoutTheirItems(t *testing.T) {
 	root := write(t, coffee())
 	a := setOf(t, root)
 	brew, tank := a.Files[1], a.Files[2]
-	if brew.Title != "Brewing" || brew.Counts != (counts{Items: 2}) || tank.Counts != (counts{Items: 3, Findings: 2}) {
+	wantBrew := counts{Items: 2, Requirements: statusCounts{Total: 2, Draft: 2}}
+	wantTank := counts{Items: 3, Findings: 2, Requirements: statusCounts{Total: 3, Approved: 1, Implemented: 2}}
+	if brew.Title != "Brewing" || brew.Counts != wantBrew || tank.Counts != wantTank {
 		t.Errorf("chapters = %+v, %+v", brew, tank)
 	}
 	if brew.Requirements != nil || tank.Requirements != nil {

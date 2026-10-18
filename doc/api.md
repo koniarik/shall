@@ -26,9 +26,9 @@ The examples below are the answers for the example set at the end of
 
 | Resource | Answer |
 |---|---|
-| `GET /api/sets` | The sets served, with their error and warning counts |
+| `GET /api/sets` | The sets served, with their error and warning counts and their requirements by status |
 | `GET /api/sets/{set}` | One set: its findings, its mission file with its items, and its chapters without theirs |
-| `GET /api/sets/{set}/files/{path}` | One file with its items |
+| `GET /api/sets/{set}/files/{path}` | One file with its items, filtered by status on request |
 | `GET /api/sets/{set}/items/{id}` | One item with its children |
 | `GET /api/sets/{set}/resolve?id={id}` | What an id names, as a reader would type it |
 | `GET /api/sets/{set}/search?q={words}` | The items an id or words name |
@@ -64,6 +64,7 @@ What the server works out:
 | `namedBy` | The items that name this one, each a reference with the `field` that names it |
 | `findings` | The findings of `shall check` that concern this item |
 | `children` | The item's children, in full |
+| `context` | Set on a requirement shown only because a child matches the statuses a file was asked for |
 
 ## `GET /api/sets`
 
@@ -75,7 +76,16 @@ What the server works out:
       "name": "coffee",
       "manifest": "shall.yaml",
       "errors": 0,
-      "warnings": 0
+      "warnings": 0,
+      "requirements": {
+        "total": 2,
+        "draft": 0,
+        "approved": 0,
+        "implemented": 2,
+        "verified": 0,
+        "waived": 0,
+        "other": 0
+      }
     }
   ],
   "clashes": [],
@@ -83,15 +93,19 @@ What the server works out:
 }
 ```
 
-`clashes` lists names that several sets share, each with their manifests;
-neither set is served under it. `findings` are those that belong to no set
+`requirements` counts each set's requirements, children included, by
+effective status; `other` counts those with no status or one the format
+does not define. `clashes` lists names that several sets share, each with
+their manifests; neither set is served under it. `findings` are those that belong to no set
 served under its name.
 
 ## `GET /api/sets/{set}`
 
 The set's files in the order they read: the mission file first, with its
 items, then the chapters in path order, each with its title, counts and the
-findings that concern the file itself, but not its items. `findings` at the
+findings that concern the file itself, but not its items. `requirements`
+counts the set's requirements by effective status, as each file's `counts`
+does for the file. `findings` at the
 top are those that concern no file of the set, such as the manifest's. A file
 that cannot be read or parsed has `"broken": true` and its findings.
 
@@ -100,6 +114,15 @@ that cannot be read or parsed has `"broken": true` and its findings.
   "version": "dm7japskbab4.1",
   "name": "coffee",
   "manifest": "shall.yaml",
+  "requirements": {
+    "total": 2,
+    "draft": 0,
+    "approved": 0,
+    "implemented": 2,
+    "verified": 0,
+    "waived": 0,
+    "other": 0
+  },
   "findings": [],
   "files": [
     {
@@ -107,7 +130,16 @@ that cannot be read or parsed has `"broken": true` and its findings.
       "kind": "mission",
       "counts": {
         "items": 3,
-        "findings": 0
+        "findings": 0,
+        "requirements": {
+          "total": 0,
+          "draft": 0,
+          "approved": 0,
+          "implemented": 0,
+          "verified": 0,
+          "waived": 0,
+          "other": 0
+        }
       },
       "findings": [],
       "mission": "Coffee in the office without anyone looking after the machine.",
@@ -148,7 +180,16 @@ that cannot be read or parsed has `"broken": true` and its findings.
       "title": "Water Tank",
       "counts": {
         "items": 2,
-        "findings": 0
+        "findings": 0,
+        "requirements": {
+          "total": 2,
+          "draft": 0,
+          "approved": 0,
+          "implemented": 2,
+          "verified": 0,
+          "waived": 0,
+          "other": 0
+        }
       },
       "findings": [],
       "retired": [
@@ -172,6 +213,10 @@ the server sends them after `objectives`, each item in the same shape.
 One file with its items, children nested; `requirements` for a chapter,
 `objectives`, `stakeholders` and `needs` for the mission file.
 
+`?status=` once or more, such as `?status=draft&status=approved`, keeps only
+the requirements at one of those effective statuses, and their parents as
+context, marked `"context": true`.
+
 ```json
 {
   "version": "dm7japskbab4.1",
@@ -180,7 +225,16 @@ One file with its items, children nested; `requirements` for a chapter,
   "title": "Water Tank",
   "counts": {
     "items": 2,
-    "findings": 0
+    "findings": 0,
+    "requirements": {
+      "total": 2,
+      "draft": 0,
+      "approved": 0,
+      "implemented": 2,
+      "verified": 0,
+      "waived": 0,
+      "other": 0
+    }
   },
   "findings": [],
   "requirements": [

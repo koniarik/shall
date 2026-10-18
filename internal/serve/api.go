@@ -33,6 +33,49 @@ type setSummary struct {
 	Manifest string `json:"manifest"`
 	Errors   int    `json:"errors"`
 	Warnings int    `json:"warnings"`
+	// Requirements counts the set's requirements, children included, by
+	// effective status.
+	Requirements statusCounts `json:"requirements"`
+}
+
+type statusCounts struct {
+	Total       int `json:"total"`
+	Draft       int `json:"draft"`
+	Approved    int `json:"approved"`
+	Implemented int `json:"implemented"`
+	Verified    int `json:"verified"`
+	Waived      int `json:"waived"`
+	// Other counts requirements with no status, or one the format does not
+	// define.
+	Other int `json:"other"`
+}
+
+func (c *statusCounts) addAll(o statusCounts) {
+	c.Total += o.Total
+	c.Draft += o.Draft
+	c.Approved += o.Approved
+	c.Implemented += o.Implemented
+	c.Verified += o.Verified
+	c.Waived += o.Waived
+	c.Other += o.Other
+}
+
+func (c *statusCounts) add(status string) {
+	c.Total++
+	switch status {
+	case "draft":
+		c.Draft++
+	case "approved":
+		c.Approved++
+	case "implemented":
+		c.Implemented++
+	case "verified":
+		c.Verified++
+	case "waived":
+		c.Waived++
+	default:
+		c.Other++
+	}
 }
 
 type clashJSON struct {
@@ -44,6 +87,8 @@ type setAnswer struct {
 	Version  string `json:"version"`
 	Name     string `json:"name"`
 	Manifest string `json:"manifest"`
+	// Requirements counts the set's requirements by effective status.
+	Requirements statusCounts `json:"requirements"`
 	// Findings are those that concern no file of the set.
 	Findings []finding.Finding `json:"findings"`
 	// Files are the mission file, with its items, then the chapters, without
@@ -69,10 +114,12 @@ type fileJSON struct {
 	Retired      []retiredJSON     `json:"retired,omitempty"`
 }
 
-// counts are the items a file holds and the findings shown in it.
+// counts are the items a file holds, the findings shown in it, and its
+// requirements by effective status.
 type counts struct {
-	Items    int `json:"items"`
-	Findings int `json:"findings"`
+	Items        int          `json:"items"`
+	Findings     int          `json:"findings"`
+	Requirements statusCounts `json:"requirements"`
 }
 
 type fileAnswer struct {
@@ -117,6 +164,9 @@ type itemJSON struct {
 	Text  string `json:"text"`
 	File  string `json:"file"`
 	Line  int    `json:"line"`
+	// Context marks a requirement shown only because a child of it matches
+	// the statuses asked for.
+	Context bool `json:"context,omitempty"`
 	// Status is the status as written; EffectiveStatus is a requirement's
 	// lowest status counting its children.
 	Status          string            `json:"status,omitempty"`
@@ -197,6 +247,13 @@ func (snap *snapshot) list() setsAnswer {
 				s.Warnings++
 			}
 		}
+		if sv.Set != nil {
+			for _, it := range sv.Set.Items {
+				if it.Kind == 'R' && sv.Set.Item(it.ID) == it {
+					s.Requirements.add(it.EffectiveStatus())
+				}
+			}
+		}
 		a.Sets = append(a.Sets, s)
 	}
 	for _, c := range snap.clashes {
@@ -218,14 +275,18 @@ func (b builder) set() setAnswer {
 	}
 	if b.sv.Set != nil {
 		for _, f := range b.sv.Set.Files {
-			a.Files = append(a.Files, b.file(f, f.Mission))
+			v := b.file(f, f.Mission, nil)
+			a.Requirements.addAll(v.Counts.Requirements)
+			a.Files = append(a.Files, v)
 		}
 	}
 	return a
 }
 
-// file returns a file's answer, with its items when withItems is true.
-func (b builder) file(f *model.File, withItems bool) *fileJSON {
+// file returns a file's answer, with its items when withItems is true. When
+// statuses names any, only the requirements at one of those effective
+// statuses come, with their parents as context.
+func (b builder) file(f *model.File, withItems bool, statuses map[string]bool) *fileJSON {
 	v := &fileJSON{
 		Path: f.Path, Kind: "chapter", Broken: f.Tree == nil,
 		Counts: b.count(f), Findings: orEmpty(b.sv.onFile[f]),
@@ -251,6 +312,11 @@ func (b builder) file(f *model.File, withItems bool) *fileJSON {
 	}
 	for _, it := range f.Items {
 		j := b.item(it)
+		if it.Kind == 'R' && len(statuses) > 0 {
+			if j = filter(j, statuses); j == nil {
+				continue
+			}
+		}
 		switch it.Kind {
 		case 'O':
 			v.Objectives = append(v.Objectives, j)
@@ -265,7 +331,25 @@ func (b builder) file(f *model.File, withItems bool) *fileJSON {
 	return v
 }
 
-// count returns the number of items in a file and of findings shown in it.
+// filter returns a requirement's answer cut down to the requirements at one
+// of statuses and their parents, or nil when none of them is.
+func filter(it *itemJSON, statuses map[string]bool) *itemJSON {
+	var kept []*itemJSON
+	for _, c := range it.Children {
+		if c = filter(c, statuses); c != nil {
+			kept = append(kept, c)
+		}
+	}
+	matches := statuses[it.EffectiveStatus]
+	if !matches && kept == nil {
+		return nil
+	}
+	it.Children, it.Context = kept, !matches
+	return it
+}
+
+// count returns the number of items in a file, of findings shown in it, and
+// of its requirements at each effective status.
 func (b builder) count(f *model.File) counts {
 	c := counts{Findings: len(b.sv.onFile[f])}
 	var walk func([]*model.Item)
@@ -273,6 +357,9 @@ func (b builder) count(f *model.File) counts {
 		for _, it := range items {
 			c.Items++
 			c.Findings += len(b.sv.onItem[it])
+			if it.Kind == 'R' && b.sv.Set.Item(it.ID) == it {
+				c.Requirements.add(it.EffectiveStatus())
+			}
 			walk(it.Children)
 		}
 	}

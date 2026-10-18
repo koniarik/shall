@@ -208,7 +208,11 @@ func (s *Server) apiFile(w http.ResponseWriter, r *http.Request) {
 		problem(w, errorAnswer{Error: fmt.Sprintf("No file of %s has the path %s.", sv.Name, r.PathValue("path"))})
 		return
 	}
-	writeJSON(w, http.StatusOK, fileAnswer{Version: snap.version, fileJSON: builder{snap, sv}.file(f, true)})
+	statuses := map[string]bool{}
+	for _, s := range r.URL.Query()["status"] {
+		statuses[s] = true
+	}
+	writeJSON(w, http.StatusOK, fileAnswer{Version: snap.version, fileJSON: builder{snap, sv}.file(f, true, statuses)})
 }
 
 func (s *Server) apiItem(w http.ResponseWriter, r *http.Request) {

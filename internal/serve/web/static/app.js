@@ -13,6 +13,7 @@ const notice = document.querySelector('.notice');
 const jump = document.querySelector('form.jump');
 const menuButton = document.querySelector('button.menu');
 const crumb = document.querySelector('.crumb');
+const barFilter = document.querySelector('.bar .filter');
 
 // What the page shows: the set's answer, the answers of its unfolded
 // chapters, and the version of the files they were built from.
@@ -84,6 +85,14 @@ function apiSet(name) {
 
 function apiFile(name, path) {
   return apiSet(name) + '/files/' + path.split('/').map(encodeURIComponent).join('/');
+}
+
+// apiChapter returns the API's address of a chapter, filtered by the
+// statuses the address chooses.
+function apiChapter(name, path) {
+  const q = new URLSearchParams();
+  for (const s of query().getAll('status')) q.append('status', s);
+  return address(apiFile(name, path), q);
 }
 
 function apiItem(name, id) {
@@ -212,7 +221,10 @@ function item(it, level) {
   h('dl', {class: 'fields'}, folded, [...named].map(([name, from]) =>
     field('named in ' + name, h('ul', {}, from.map((n) => h('li', {}, ref(n), ' ', n.title))))))) : null;
 
-  return h('article', {'class': 'item kind-' + it.kind, 'id': it.id, 'data-anchor': true, 'tabindex': -1},
+  return h('article', {
+    'class': 'item kind-' + it.kind + (it.context ? ' context' : ''),
+    'id': it.id, 'data-anchor': true, 'tabindex': -1,
+  },
       h('div', {'class': 'head', 'role': 'heading', 'aria-level': Math.min(level, 6)},
           ref({id: it.id, state: 'item', set: state.set.name, file: it.file}, false), ' ',
           h('span', {class: 'title'}, it.title), ' ', status(it)),
@@ -240,6 +252,9 @@ function section(entry) {
   const foldable = !mission && !entry.broken;
   const anchor = 'file:' + entry.path;
   const c = entry.counts;
+  const chosen = query().getAll('status');
+  const matching = matches(entry);
+  const empty = foldable && emptyUnderFilter(entry);
   let content = null;
   if (open && mission) {
     content = [
@@ -256,12 +271,14 @@ function section(entry) {
     'class': 'file' + (mission ? ' mission' : '') + (entry.broken ? ' broken' : ''),
     'id': anchor, 'data-anchor': true, 'data-path': entry.path, 'data-open': String(open),
     'data-held': foldable && !open && query().getAll('fold').includes(entry.path),
+    'data-empty': empty,
   },
   h('h2', {},
       foldable ? h('button', {
         'type': 'button', 'class': 'fold', 'aria-expanded': String(open), 'aria-controls': 'body:' + entry.path,
       }, heading(entry)) : heading(entry),
-      h('span', {class: 'counts'}, plural(c.items, 'item'), c.findings ? ', ' + plural(c.findings, 'finding') : ''),
+      h('span', {class: 'counts'}, plural(c.items, 'item'), c.findings ? ', ' + plural(c.findings, 'finding') : '',
+          foldable && chosen.length ? ' · ' + matching + ' at ' + chosen.join(' or ') : ''),
       h('span', {class: 'path'}, entry.path)),
   open || entry.broken ? findings((full ?? entry).findings) : null,
   h('div', {id: 'body:' + entry.path}, content));
@@ -290,18 +307,70 @@ function renderOutline() {
         }, heading(f)),
         sub.length ? h('ul', {class: 'pure-menu-list'}, sub) : null);
   });
-  outline.replaceChildren(h('div', {class: 'pure-menu', id: 'outline-menu'},
-      h('ul', {class: 'pure-menu-list'}, entries)));
+  const buttons = filterButtons();
+  outline.replaceChildren(
+      buttons.length ? h('div', {
+        'class': 'filter', 'role': 'group', 'aria-label': 'Show only the requirements at a status',
+      }, buttons) : '',
+      h('div', {class: 'pure-menu', id: 'outline-menu'}, h('ul', {class: 'pure-menu-list'}, entries)));
   mark();
 }
 
+const statusNames = ['draft', 'approved', 'implemented', 'verified', 'waived'];
+
+// matches returns how many of a file's requirements stand at a status the
+// address chooses.
+function matches(entry) {
+  return query().getAll('status').reduce((n, s) => n + (entry.counts.requirements[s] ?? 0), 0);
+}
+
+// emptyUnderFilter tells whether a chapter holds nothing the chosen statuses
+// show.
+function emptyUnderFilter(entry) {
+  return entry.kind === 'chapter' && query().getAll('status').length > 0 && matches(entry) === 0;
+}
+
+// filterButtons offers the effective statuses the set's requirements stand
+// at, each with its count, to show only the requirements at the chosen ones.
+// The bar holds them, or on a narrow screen the outline.
+function filterButtons() {
+  const counts = state.set.requirements;
+  const chosen = query().getAll('status');
+  return statusNames.filter((s) => counts[s] || chosen.includes(s)).map((s) => h('button', {
+    'type': 'button', 'class': 'pure-button status-filter', 'data-status': s,
+    'aria-pressed': String(chosen.includes(s)),
+  }, s + ' ' + (counts[s] ?? 0)));
+}
+
+// dropFilter shows every requirement again.
+function dropFilter() {
+  for (const s of query().getAll('status')) record('status', s, false);
+}
+
 function renderDocument(missing) {
+  const buttons = filterButtons();
+  barFilter.replaceChildren(...buttons);
+  barFilter.hidden = buttons.length === 0;
+  // On a narrow screen the filter sits behind the Outline button, which says
+  // when one is on.
+  const filtered = query().getAll('status').length > 0;
+  menuButton.textContent = filtered ? 'Outline •' : 'Outline';
+  menuButton.setAttribute('aria-label', filtered ? 'Outline, filtered by status' : 'Outline');
   main.replaceChildren(
       missing ? h('p', {class: 'missing'}, missing) : '',
       findings(state.set.findings, true) ?? '',
       ...state.set.files.map(section));
   renderOutline();
   watchFolded();
+}
+
+// statuses shows how many requirements stand at each effective status.
+function statuses(c) {
+  const parts = [plural(c.total, 'requirement')];
+  for (const name of ['draft', 'approved', 'implemented', 'verified', 'waived', 'other']) {
+    if (c[name]) parts.push(c[name] + ' ' + name);
+  }
+  return parts.join(' · ');
 }
 
 function renderStart(answer) {
@@ -315,7 +384,8 @@ function renderStart(answer) {
       answer.sets.length ? h('ul', {class: 'sets'}, answer.sets.map((s) => h('li', {},
           h('a', {href: setBase(s.name)}, s.name), ' ', h('span', {class: 'path'}, s.manifest),
           s.errors ? [' ', h('span', {class: 'count error'}, plural(s.errors, 'error'))] : '',
-          s.warnings ? [' ', h('span', {class: 'count warning'}, plural(s.warnings, 'warning'))] : ''))) :
+          s.warnings ? [' ', h('span', {class: 'count warning'}, plural(s.warnings, 'warning'))] : '',
+          h('div', {class: 'statuses'}, statuses(s.requirements))))) :
         h('p', {}, 'No set is served here.'));
 }
 
@@ -349,9 +419,9 @@ async function loadSet(also = []) {
   }
   const chapters = new Map();
   await Promise.all(r.body.files
-      .filter((f) => f.kind === 'chapter' && !f.broken && want.has(f.path))
+      .filter((f) => f.kind === 'chapter' && !f.broken && want.has(f.path) && !emptyUnderFilter(f))
       .map(async (f) => {
-        const c = await api(apiFile(set, f.path));
+        const c = await api(apiChapter(set, f.path));
         if (c.ok) chapters.set(f.path, c.body);
       }));
   state.set = r.body;
@@ -373,10 +443,17 @@ async function load() {
   jump.hidden = false;
   menuButton.hidden = false;
   outline.hidden = false;
-  const loaded = await loadSet();
+  let loaded = await loadSet();
   if (!loaded) return;
   renderDocument(loaded.missing);
-  show(route().target, false);
+  const t = route().target;
+  if (t && !document.getElementById(t) && query().getAll('status').length) {
+    dropFilter();
+    loaded = await loadSet();
+    if (!loaded) return;
+    renderDocument(loaded.missing);
+  }
+  show(t, false);
 }
 
 // Folding and unfolding chapters.
@@ -387,7 +464,7 @@ async function load() {
 async function setChapter(sec, open, {chosen = true, keepPlace = false} = {}) {
   const path = sec.dataset.path;
   if (open) {
-    const r = await api(apiFile(state.set.name, path));
+    const r = await api(apiChapter(state.set.name, path));
     if (!r.ok) {
       sec.dataset.failed = '';
       return;
@@ -420,7 +497,7 @@ async function setChapter(sec, open, {chosen = true, keepPlace = false} = {}) {
 
 function reachable() {
   return [...main.querySelectorAll(
-      'section.file[data-open="false"]:not([data-held]):not([data-failed]):not(.broken)')];
+      'section.file[data-open="false"]:not([data-held]):not([data-failed]):not([data-empty]):not(.broken)')];
 }
 
 function inView(sec) {
@@ -480,6 +557,10 @@ async function go(a) {
   const path = a.dataset.chapter;
   const sec = path && document.getElementById('file:' + path);
   if (sec && sec.dataset.open !== 'true') await setChapter(sec, true);
+  if (!document.getElementById(a.dataset.item) && query().getAll('status').length) {
+    dropFilter();
+    await refresh(true);
+  }
   history.replaceState({...history.state, scroll: scrollY}, '');
   history.pushState(null, '', address(new URL(a.getAttribute('href'), location.href).pathname, query()));
   show(a.dataset.item);
@@ -506,6 +587,12 @@ document.addEventListener('click', (e) => {
   if (fold) {
     const sec = fold.closest('section.file');
     setChapter(sec, sec.dataset.open !== 'true');
+    return;
+  }
+  const status = e.target.closest('button.status-filter');
+  if (status) {
+    record('status', status.dataset.status, status.getAttribute('aria-pressed') !== 'true');
+    refresh(true);
   }
 });
 

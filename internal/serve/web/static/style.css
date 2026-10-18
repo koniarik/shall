@@ -185,12 +185,19 @@ main {
 
 main.alone { margin: 0 auto; }
 
+.filter .status-filter { padding: 0.15em 0.6em; font-size: 0.85rem; white-space: nowrap; }
+.filter .status-filter[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.bar .filter:not([hidden]) { display: flex; gap: 0.3rem; min-width: 0; margin-left: 0.6rem; overflow-x: auto; }
+.outline .filter { display: none; }
+
 @media (max-width: 60em) {
   .menu:not([hidden]) { display: inline-block; }
   body.document .layout { display: block; }
   main { padding: 1rem 1rem 60vh; }
   .bar { gap: 0.4rem; padding: 0 0.5rem; }
   .crumb { display: none; }
+  .bar .filter:not([hidden]) { display: none; }
+  .outline .filter { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0 1rem 0.8rem; }
   .jump input { width: 100%; }
 
   .outline {
@@ -264,6 +271,8 @@ h3 {
 }
 
 .item.target { border-left-color: var(--fg); background: var(--soft); }
+.item.context > .head .title, .item.context > .text { color: var(--muted); }
+
 .item:focus { outline: none; }
 .item:focus-visible { outline: 2px solid var(--link); }
 .item > .head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
@@ -302,7 +311,8 @@ details.more > .fields { margin: 0.2rem 0 0 1rem; font-size: inherit; }
 
 .summary p { margin: 0.1rem 0 0.4rem; }
 .sets { padding-left: 1.2rem; }
-.sets li { margin: 0.3rem 0; }
+.sets li { margin: 0.5rem 0; }
+.sets .statuses { color: var(--muted); font-size: 0.9rem; }
 
 #preview {
   position: absolute;
