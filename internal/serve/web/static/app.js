@@ -130,8 +130,13 @@ function ref(r, withPreview = true) {
   }
 }
 
-function refs(list) {
-  return list.flatMap((r, i) => (i ? [', ', ref(r)] : [ref(r)]));
+// titled shows what an id names with the item's title beside it.
+function titled(r) {
+  return r.state === 'item' && r.title ? [ref(r), ' ', h('span', {class: 'ref-title'}, r.title)] : ref(r);
+}
+
+function refs(list, show = ref) {
+  return list.flatMap((r, i) => (i ? [', ', show(r)] : [show(r)]));
 }
 
 // findings shows findings, each with its severity, field and place; withID
@@ -176,10 +181,10 @@ function links(list) {
 function item(it, level) {
   const requirement = it.kind === 'requirement';
   const fields = [
-    it.stakeholder ? field('stakeholder', ref(it.stakeholder)) : null,
+    it.stakeholder ? field('stakeholder', titled(it.stakeholder)) : null,
     it.measure ? field('measure', it.measure) : null,
     it.verify ? field('verify', it.verify) : null,
-    it.mirrors ? field('mirrors', ref(it.mirrors)) : null,
+    it.mirrors ? field('mirrors', titled(it.mirrors)) : null,
     it.links?.length ? field('links', links(it.links)) : null,
     !requirement && it.notes?.length ? field('notes', list(it.notes)) : null,
   ].filter(Boolean);
@@ -211,7 +216,7 @@ function item(it, level) {
       h('div', {'class': 'head', 'role': 'heading', 'aria-level': Math.min(level, 6)},
           ref({id: it.id, state: 'item', set: state.set.name, file: it.file}, false), ' ',
           h('span', {class: 'title'}, it.title), ' ', status(it)),
-      it.serves?.length ? h('p', {class: 'serves'}, 'serves ', refs(it.serves)) : null,
+      it.serves?.length ? h('p', {class: 'serves'}, 'serves ', refs(it.serves, titled)) : null,
       h('p', {class: 'text'}, it.text),
       fields.length ? h('dl', {class: 'fields'}, fields) : null,
       findings(it.findings),
@@ -578,24 +583,99 @@ addEventListener('storage', (e) => {
   }
 });
 
-// Jumping to an id: the server says what it names.
+// Finding: the server says what a reader typed names, an item by its id or
+// the items that hold the words, and the page lists them under the box.
+
+const input = jump.elements.id;
+const results = document.getElementById('results');
+let found = [];
+let active = -1;
+let searches = 0;
+let searchTimer = 0;
+
+async function search(q) {
+  const n = ++searches;
+  const r = await api(apiSet(state.set.name) + '/search?q=' + encodeURIComponent(q));
+  return n === searches && r.ok ? r.body : null;
+}
+
+function listFound(list) {
+  found = list;
+  active = -1;
+  results.replaceChildren(...list.map((r, i) => h('li', {
+    'id': 'result-' + i, 'role': 'option', 'aria-selected': 'false', 'data-index': i,
+  }, h('span', {class: 'ref'}, r.itemId ?? r.id), ' ', r.title)));
+  results.hidden = list.length === 0;
+  input.setAttribute('aria-expanded', String(!results.hidden));
+  input.removeAttribute('aria-activedescendant');
+}
+
+function choose(i) {
+  active = i;
+  for (const li of results.children) li.setAttribute('aria-selected', String(Number(li.dataset.index) === i));
+  input.setAttribute('aria-activedescendant', 'result-' + i);
+  results.children[i].scrollIntoView({block: 'nearest'});
+}
+
+function goFound(r) {
+  listFound([]);
+  notice.textContent = '';
+  const link = ref(r);
+  if (link.hasAttribute('data-local')) go(link);
+  else location.assign(link.getAttribute('href'));
+}
+
+input.addEventListener('input', () => {
+  notice.textContent = '';
+  clearTimeout(searchTimer);
+  const q = input.value.trim();
+  if (q.length < 2 || !state.set) {
+    searches++;
+    listFound([]);
+    return;
+  }
+  searchTimer = setTimeout(async () => {
+    const a = await search(q);
+    if (a) listFound(a.results);
+  }, 150);
+});
+
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown' && found.length) {
+    e.preventDefault();
+    choose(Math.min(active + 1, found.length - 1));
+  } else if (e.key === 'ArrowUp' && found.length) {
+    e.preventDefault();
+    choose(Math.max(active - 1, 0));
+  } else if (e.key === 'Escape' && found.length) {
+    e.stopPropagation();
+    listFound([]);
+  }
+});
+
+input.addEventListener('blur', () => listFound([]));
+
+results.addEventListener('mousedown', (e) => {
+  const li = e.target.closest('li[data-index]');
+  if (!li) return;
+  e.preventDefault();
+  goFound(found[Number(li.dataset.index)]);
+});
 
 jump.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const id = jump.elements.id.value.trim();
-  if (!id || !state.set) return;
-  const r = await api(apiSet(state.set.name) + '/resolve?id=' + encodeURIComponent(id));
-  if (!r.ok) return;
-  if (r.body.ref.state !== 'item') {
-    notice.textContent = r.body.message ?? '';
+  if (active >= 0) {
+    goFound(found[active]);
     return;
   }
-  notice.textContent = '';
-  const link = ref(r.body.ref);
-  if (link.hasAttribute('data-local')) go(link);
-  else location.assign(link.getAttribute('href'));
+  const q = input.value.trim();
+  if (!q || !state.set) return;
+  clearTimeout(searchTimer);
+  const a = await search(q);
+  if (!a) return;
+  if (a.results.length) goFound(a.results[0]);
+  else notice.textContent = a.message ?? '';
 });
-jump.elements.id.addEventListener('input', () => notice.textContent = '');
 
 // Previews, on pointing at a link or moving keyboard focus to it.
 

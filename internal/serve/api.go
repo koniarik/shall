@@ -1,6 +1,9 @@
 package serve
 
 import (
+	"cmp"
+	"fmt"
+	"regexp"
 	"strings"
 
 	"shall/internal/finding"
@@ -87,6 +90,24 @@ type resolveAnswer struct {
 	Ref     refJSON `json:"ref"`
 	// Message says why the id names no item.
 	Message string `json:"message,omitempty"`
+}
+
+type searchAnswer struct {
+	Version string `json:"version"`
+	Query   string `json:"query"`
+	// Results are the items found, those matching by id first, then by
+	// title, then by text, each group in reading order.
+	Results []searchResult `json:"results"`
+	// More counts the items found beyond those listed.
+	More int `json:"more,omitempty"`
+	// Message says why nothing was found.
+	Message string `json:"message,omitempty"`
+}
+
+type searchResult struct {
+	// Match is id, title or text: where the words were found.
+	Match string `json:"match"`
+	refJSON
 }
 
 type itemJSON struct {
@@ -318,6 +339,94 @@ func (b builder) item(it *model.Item) *itemJSON {
 		v.Children = append(v.Children, b.item(c))
 	}
 	return v
+}
+
+// idLike matches what a reader types as an id rather than as a word.
+var idLike = regexp.MustCompile(`^[OSNRosnr][0-9]+(\.[0-9]+)*$`)
+
+// searchLimit is the most results a search lists.
+const searchLimit = 50
+
+// resolve returns what an id names as a reader would type it: an id of the
+// set, or name/id of a set it depends on or the server serves, matched
+// exactly or else in capitals. The message says why it names no item.
+func (b builder) resolve(id string) (refJSON, string) {
+	target, local := b.sv, id
+	if name, rest, ok := strings.Cut(id, "/"); ok {
+		target, local = b.sv.deps[name], rest
+		if target == nil {
+			target = b.snap.byName[name]
+		}
+		if target == nil {
+			return refJSON{ID: id, State: "unknown"}, fmt.Sprintf("No set named %s is served here.", name)
+		}
+	}
+	if target.item(local) == nil && target.retiredWith(local) == nil {
+		local = strings.ToUpper(local)
+	}
+	r := b.refIn(target, local, id)
+	switch r.State {
+	case "retired":
+		e := target.retiredWith(local)
+		return r, fmt.Sprintf("%s was retired at %s:%d.", id, e.File.Path, e.Line)
+	case "unknown":
+		return r, fmt.Sprintf("No item has the id %s.", id)
+	}
+	return r, ""
+}
+
+// search returns what a reader typed names: the item a single word names as
+// an id, then the items of the set whose id or title holds every word, then
+// those whose text does, ignoring case.
+func (b builder) search(q string) searchAnswer {
+	a := searchAnswer{Version: b.snap.version, Query: q, Results: []searchResult{}}
+	words := strings.Fields(strings.ToLower(q))
+	if len(words) == 0 || b.sv.Set == nil {
+		return a
+	}
+	var exact refJSON
+	var message string
+	if len(words) == 1 {
+		exact, message = b.resolve(strings.TrimSpace(q))
+		if exact.State == "item" {
+			a.Results = append(a.Results, searchResult{Match: "id", refJSON: exact})
+		}
+	}
+	holds := func(s string) bool {
+		s = strings.ToLower(s)
+		for _, w := range words {
+			if !strings.Contains(s, w) {
+				return false
+			}
+		}
+		return true
+	}
+	var byMatch [2][]*model.Item
+	for _, it := range b.sv.Set.Items {
+		switch {
+		case b.sv.Set.Item(it.ID) != it, exact.State == "item" && exact.Set == b.sv.Name && it.ID == cmp.Or(exact.ItemID, exact.ID):
+		case holds(it.ID + " " + it.Title()):
+			byMatch[0] = append(byMatch[0], it)
+		case holds(it.ID + " " + it.Title() + " " + it.Text()):
+			byMatch[1] = append(byMatch[1], it)
+		}
+	}
+	for i, match := range []string{"title", "text"} {
+		for _, it := range byMatch[i] {
+			if len(a.Results) == searchLimit {
+				a.More++
+				continue
+			}
+			a.Results = append(a.Results, searchResult{Match: match, refJSON: b.refIn(b.sv, it.ID, it.ID)})
+		}
+	}
+	if len(a.Results) == 0 {
+		a.Message = "No item holds " + strings.Join(words, ", ") + "."
+		if exact.State == "retired" || strings.Contains(q, "/") || idLike.MatchString(q) {
+			a.Message = message
+		}
+	}
+	return a
 }
 
 func retiredList(entries []*model.Retired) []retiredJSON {

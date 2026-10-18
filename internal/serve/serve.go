@@ -114,6 +114,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/sets/{set}/files/{path...}", s.apiFile)
 	mux.HandleFunc("GET /api/sets/{set}/items/{id}", s.apiItem)
 	mux.HandleFunc("GET /api/sets/{set}/resolve", s.apiResolve)
+	mux.HandleFunc("GET /api/sets/{set}/search", s.apiSearch)
 	mux.HandleFunc("GET /api/events", s.events)
 	return s.guard(mux)
 }
@@ -237,34 +238,18 @@ func (s *Server) apiResolve(w http.ResponseWriter, r *http.Request) {
 	if sv == nil {
 		return
 	}
-	id := strings.TrimSpace(r.URL.Query().Get("id"))
-	a := resolveAnswer{Version: snap.version}
-	target, local := sv, id
-	if name, rest, ok := strings.Cut(id, "/"); ok {
-		target, local = sv.deps[name], rest
-		if target == nil {
-			target = snap.byName[name]
-		}
-		if target == nil {
-			a.Ref = refJSON{ID: id, State: "unknown"}
-			a.Message = fmt.Sprintf("No set named %s is served here.", name)
-			writeJSON(w, http.StatusOK, a)
-			return
-		}
+	ref, message := builder{snap, sv}.resolve(strings.TrimSpace(r.URL.Query().Get("id")))
+	writeJSON(w, http.StatusOK, resolveAnswer{Version: snap.version, Ref: ref, Message: message})
+}
+
+// apiSearch lists the items whose id, title or text holds every word asked
+// for.
+func (s *Server) apiSearch(w http.ResponseWriter, r *http.Request) {
+	snap, sv := s.set(w, r)
+	if sv == nil {
+		return
 	}
-	if target.item(local) == nil && target.retiredWith(local) == nil {
-		local = strings.ToUpper(local)
-	}
-	b := builder{snap, sv}
-	a.Ref = b.refIn(target, local, id)
-	switch a.Ref.State {
-	case "retired":
-		e := target.retiredWith(local)
-		a.Message = fmt.Sprintf("%s was retired at %s:%d.", id, e.File.Path, e.Line)
-	case "unknown":
-		a.Message = fmt.Sprintf("No item has the id %s.", id)
-	}
-	writeJSON(w, http.StatusOK, a)
+	writeJSON(w, http.StatusOK, builder{snap, sv}.search(strings.TrimSpace(r.URL.Query().Get("q"))))
 }
 
 // events streams the version of the files: once when a stream opens, and

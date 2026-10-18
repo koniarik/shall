@@ -81,8 +81,10 @@ requirements:
         status: implemented
       - id: R26.5
         title: Loaded When Unfolded
-        text: While a chapter is folded, the server SHALL send none of its items to the page,
-          except in a preview or a backlink.
+        text: While a chapter is folded, the server SHALL NOT send the chapter to the page.
+        rationale: A set of thousands of requirements then opens as quickly as a small one. A
+          single item still comes on its own wherever the page needs it, such as in a preview,
+          a backlink or a search result.
         status: implemented
       - id: R26.6
         title: Unfolded To Reach An Item
@@ -201,6 +203,13 @@ requirements:
         text: If a field names a retired id, then the server SHALL show that id as plain text,
           marked retired, with the title it was retired under.
         status: implemented
+      - id: R27.6
+        title: Titles Beside Ids
+        text: The server SHALL show the title of each item that serves, stakeholder or mirrors
+          names beside its id.
+        rationale: A reader then sees what an item serves without pointing at each id, which a
+          phone cannot do. The titles are grey, so that the statement stays the text to read.
+        status: implemented
   - id: R28
     title: Jump To An Id
     text: When the reader enters an id, the server SHALL show the document at that item, in the
@@ -218,6 +227,13 @@ requirements:
         title: Jump To A Retired Id
         text: If the reader enters a retired id, then the server SHALL keep the document where it
           is and say the file and line where the id was retired.
+        status: implemented
+      - id: R28.3
+        title: Found By Words
+        text: When the reader enters words, the server SHALL list the items whose id, title or
+          text holds every one of them, those matching by id first, then by title, then by text.
+        rationale: A reader often knows what a requirement says before its id, and O2 measures
+          the time to find one by its text.
         status: implemented
   - id: R29
     title: Follows The Files

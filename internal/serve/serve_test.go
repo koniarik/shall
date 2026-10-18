@@ -2,6 +2,7 @@ package serve
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"encoding/json"
 	"io"
@@ -446,6 +447,39 @@ func TestJumpToAnId(t *testing.T) {
 		answer(t, root, "/api/sets/coffee/resolve?id="+strings.ReplaceAll(c.id, " ", "+"), http.StatusOK, &a)
 		if a.Ref.State != c.state || a.Ref.Set != c.set || a.Ref.ItemID != c.itemID || a.Message != c.message {
 			t.Errorf("resolve %q = %+v %q, want %s in %q as %q, %q", c.id, a.Ref, a.Message, c.state, c.set, c.itemID, c.message)
+		}
+	}
+}
+
+func TestFoundByWords(t *testing.T) {
+	t.Attr("verifies", "R28.3")
+	root := write(t, with(coffee(), map[string]string{
+		"tea/shall.yaml":         "name: tea\nformat: 1\n",
+		"tea/mission.shall.yaml": mission,
+	}))
+	for _, c := range []struct{ q, want, message string }{
+		{"lamp", "title:R1 title:R1.1", ""},
+		{"Tank EMPTY", "text:N1 text:R1", ""},
+		{"r1", "id:R1 title:R1.1", ""},
+		{"brew", "title:O1 title:N1 title:R4 title:R5 text:R2", ""},
+		{"tea/n1", "id:N1@tea", ""},
+		{"lamp door", "", "No item holds lamp, door."},
+		{"R3", "", "R3 was retired at b-tank.shall.yaml:18."},
+		{"r99", "", "No item has the id r99."},
+		{"milk/N1", "", "No set named milk is served here."},
+	} {
+		var a searchAnswer
+		answer(t, root, "/api/sets/coffee/search?q="+strings.ReplaceAll(c.q, " ", "+"), http.StatusOK, &a)
+		var got []string
+		for _, r := range a.Results {
+			s := r.Match + ":" + cmp.Or(r.ItemID, r.ID)
+			if r.Set != "coffee" {
+				s += "@" + r.Set
+			}
+			got = append(got, s)
+		}
+		if strings.Join(got, " ") != c.want || a.Message != c.message {
+			t.Errorf("search %q = %v %q, want %s %q", c.q, got, a.Message, c.want, c.message)
 		}
 	}
 }

@@ -17,8 +17,9 @@
 <a class="home" href="/">shall</a><span class="crumb"></span>
 <span class="space"></span>
 <form class="jump pure-form" role="search" hidden>
-<input type="text" name="id" placeholder="Jump to an id" aria-label="Jump to an id" autocomplete="off" spellcheck="false">
+<input type="text" name="id" placeholder="Find an id or words" aria-label="Find an id or words" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="results">
 <button class="pure-button">Go</button>
+<ul id="results" role="listbox" aria-label="Items found" hidden></ul>
 </form>
 <button type="button" class="scheme pure-button" aria-label="Switch between black on white and white on black" title="Switch between black on white and white on black">◐</button>
 <output class="notice" aria-live="polite"></output>

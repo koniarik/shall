@@ -31,6 +31,7 @@ The examples below are the answers for the example set at the end of
 | `GET /api/sets/{set}/files/{path}` | One file with its items |
 | `GET /api/sets/{set}/items/{id}` | One item with its children |
 | `GET /api/sets/{set}/resolve?id={id}` | What an id names, as a reader would type it |
+| `GET /api/sets/{set}/search?q={words}` | The items an id or words name |
 | `GET /api/events` | A stream of versions, one each time the files change |
 
 ## References
@@ -303,6 +304,40 @@ capitals. The answer is always 200; a `message` says why an id names no item.
     "title": "Water Handling"
   },
   "message": "R2 was retired at requirements/01-tank.shall.yaml:22."
+}
+```
+
+## `GET /api/sets/{set}/search?q={words}`
+
+What a reader typed names. A single word that names an item as an id, as
+`resolve` reads it, comes first with `"match": "id"`. Then come the items of
+the set whose id or title holds every word, with `"match": "title"`, and
+those whose text does, with `"match": "text"`, each group in reading order,
+ignoring case. At most 50 are listed, and `more` counts the rest. When
+nothing is found, `message` says why.
+
+```json
+{
+  "version": "dm7japskbab4.1",
+  "query": "lamp",
+  "results": [
+    {
+      "match": "title",
+      "id": "R1",
+      "state": "item",
+      "set": "coffee",
+      "title": "Refill Lamp",
+      "file": "requirements/01-tank.shall.yaml"
+    },
+    {
+      "match": "title",
+      "id": "R1.1",
+      "state": "item",
+      "set": "coffee",
+      "title": "Lamp Seen From The Door",
+      "file": "requirements/01-tank.shall.yaml"
+    }
+  ]
 }
 ```
 
