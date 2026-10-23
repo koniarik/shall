@@ -260,11 +260,26 @@ h1 { font-size: 1.6rem; }
 .kind-topic > .text > :first-child { margin-top: 0; }
 .kind-topic > .text pre { overflow-x: auto; padding: 0.5rem; border: 1px solid var(--line); background: var(--soft); }
 .kind-topic > .text blockquote { margin-left: 0; padding-left: 1rem; border-left: 3px solid var(--muted); }
-.kind-topic > .text table { margin: 0.5rem 0; }
 .kind-topic > .text .md-heading { margin: 1rem 0 0.25rem; font-weight: bold; }
-.align-left { text-align: left; }
-.align-center { text-align: center; }
-.align-right { text-align: right; }
+/* A table of a topic: rows parted by lines, the head by a stronger one,
+   scrolling on its own when wider than the text. */
+.md-table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+  border-collapse: collapse;
+}
+.md-table th, .md-table td {
+  padding: 0.25rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.md-table th { border-bottom: 2px solid var(--muted); font-weight: 600; }
+.md-table .align-center { text-align: center; }
+.md-table .align-right { text-align: right; }
 figure.diagram { margin: 0.5rem 0; overflow-x: auto; }
 figure.diagram svg { max-width: 100%; height: auto; }
 /* Graphviz draws black on white; those follow the colour scheme, other

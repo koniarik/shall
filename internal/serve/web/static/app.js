@@ -229,7 +229,7 @@ function block(b, level) {
     case 'rule':
       return h('hr', {});
     case 'table':
-      return h('table', {class: 'pure-table'},
+      return h('table', {class: 'md-table'},
           h('thead', {}, h('tr', {}, b.head.map((c, i) => h('th', {class: b.align?.[i] ? 'align-' + b.align[i] : null}, inline(c))))),
           h('tbody', {}, b.rows.map((row) => h('tr', {},
               row.map((c, i) => h('td', {class: b.align?.[i] ? 'align-' + b.align[i] : null}, inline(c)))))));
