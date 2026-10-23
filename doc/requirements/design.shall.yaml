@@ -83,6 +83,16 @@ items:
           result of the test that verifies it, so evidence tooling reads the link instead of
           parsing test names.
         status: implemented
+  - id: R58
+    title: Tested On Every Change
+    text: The repository SHALL run every test on each push and pull request, and fail the run
+      when a test is skipped.
+    rationale: A change that breaks a promise a test verifies is then found before it is merged.
+      The tests skip what a machine lacks, Chrome or pre-commit, and a skipped test would
+      otherwise pass for one that holds.
+    serves: [R22]
+    verify: inspection
+    status: approved
   - id: R23
     title: Standard Flag Parsing
     text: The tool SHALL parse its command line with the flag package of Go's standard library.

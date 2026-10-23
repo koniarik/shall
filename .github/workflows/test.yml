@@ -1,0 +1,39 @@
+# Runs every test on each push and pull request. The tests skip what this
+# machine lacks, Chrome or pre-commit; here both are installed, so a skipped
+# test fails the run.
+name: test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Install pre-commit
+        run: pipx install pre-commit==4.6.2
+      - name: Test
+        run: |
+          set -o pipefail
+          go test -race -v ./... 2>&1 | tee test.log
+      - name: No test skipped
+        run: |
+          if grep -E '^ *--- SKIP' test.log; then
+            echo "These tests skipped, though everything they need is installed here." >&2
+            exit 1
+          fi

@@ -329,8 +329,14 @@ func TestOneHookToAdopt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if dir, err := exec.Command(goTool, "list", "-m", "-f", "{{.Dir}}", "github.com/goccy/go-yaml").Output(); err != nil || strings.TrimSpace(string(dir)) == "" {
-		t.Skip("the module cache lacks goccy/go-yaml; build shall once first")
+	mods, err := exec.Command(goTool, "list", "-m", "-f", "{{if not .Main}}{{.Path}}={{.Dir}}{{end}}", "all").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range strings.Fields(string(mods)) {
+		if path, dir, _ := strings.Cut(m, "="); dir == "" {
+			t.Skip("the module cache lacks " + path + "; build shall once first")
+		}
 	}
 	home := t.TempDir()
 	gitConfig := filepath.Join(home, "gitconfig")
