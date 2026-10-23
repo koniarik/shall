@@ -354,7 +354,9 @@ func TestOneHookToAdopt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mods, err := exec.Command(goTool, "list", "-m", "-f", "{{if not .Main}}{{.Path}}={{.Dir}}{{end}}", "all").Output()
+	// The modules of the packages the hook builds; the module graph also
+	// holds modules only their tests use, which a build never downloads.
+	mods, err := exec.Command(goTool, "list", "-deps", "-f", "{{with .Module}}{{if not .Main}}{{.Path}}={{.Dir}}{{end}}{{end}}", "shall/...").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
