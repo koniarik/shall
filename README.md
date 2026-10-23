@@ -31,7 +31,7 @@ doc/requirements/baseline.shall.yaml:12: warning: R8 serves: the requirement ser
 ```
 
 Each finding names the file, line, item and field it concerns. Warnings do
-not fail the run; errors do. The twelve warnings are real: the baseline
+not fail the run; errors do. The warnings are real: the baseline
 requirements serve no need yet.
 
 To install the binary instead, which puts `shall` in `$(go env GOPATH)/bin`:
@@ -62,11 +62,11 @@ shall diff [-json] [-base ref] [-head ref] [directory]
 ```
 
 `shall diff` compares the sets under the directory between two git refs,
-`HEAD` and the working tree by default, item by item: what was added,
-removed, retired or changed, field by field with the changed words marked
-`[-old-]{+new+}`, and the checker's findings gained and lost. It exits with 0
-when nothing changed, 1 when something did and 2 when it cannot compare;
-`-json` prints the same for scripts, as [doc/diff.md](doc/diff.md) describes.
+item by item: what was added, removed, retired or changed, field by field
+with the changed words marked `[-old-]{+new+}`, and the checker's findings
+gained and lost; `-json` prints the same for scripts.
+[doc/diff.md](doc/diff.md) describes its output, and points to the
+requirements that say what it reads and how it exits.
 
 ```text
 shall serve [-addr host:port] [directory]
