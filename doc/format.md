@@ -43,7 +43,8 @@ depends:
 
 Every file under `path`, in any subdirectory, whose name ends in `.shall.yaml`
 belongs to the set. Each file is a **chapter**, and holds items of any kind,
-which read in the order they are written.
+which read in the order they are written. Chapters read in the order of their
+paths, the mission file first.
 
 | Field | Meaning |
 |---|---|
@@ -63,7 +64,7 @@ why the product exists:
 ## Ids
 
 An id is a letter, the prefix of its item's kind, followed by a path of
-numbers joined by `.`: `O3`, `N3.2`, `T12.1.4`. The path places the item in
+numbers joined by `.`: `S3`, `N3.2`, `T12.1.4`. The path places the item in
 its set's tree. A top-level item's path is one number; a child's path is its
 parent's path followed by `.` and a number, whatever the parent's kind.
 Numbers start at 1, have no leading zeros, and need not be consecutive.
@@ -74,10 +75,9 @@ chapters, so no two items of a set share a path. A reference whose letter is
 not the kind of the item its path names is an error.
 
 An id does not depend on the chapter its item lives in, so a top-level item
-can move between chapters unchanged. Moving an item to another parent, from
-the top level under a parent, or from a parent to the top level, changes its
-id: the old id is retired and the item takes a new one. A retired path never
-returns, under any letter.
+can move between chapters unchanged. Moving an item to another parent, or to
+or from the top level, changes its id: the old id is retired and the item
+takes a new one.
 
 ## Retiring an item
 
@@ -86,8 +86,10 @@ trace. Its entry goes into the `retired` list of the place that held it: a
 chapter for a top-level item, its parent item for a child. An entry has the
 item's `id` and the `title` it had; git holds the rest of its history.
 
-Retiring an item retires its children with it. A reference to a retired id is
-a warning, so that a large change can land in several steps.
+Retiring an item retires its children with it. A retired path never returns,
+under any letter. A reference to a retired id is a warning, so that a large
+change can land in several steps; a reference to a retired path under a
+letter other than the retired item's is an error.
 
 ## Items
 
@@ -97,7 +99,7 @@ The items of a set form trees. Every item has these fields:
 |---|---|
 | `id` | Its id, with its kind's prefix. |
 | `title` | A short name, shown wherever the item is listed. |
-| `text` | What the item says. Each kind below gives `text` its meaning. |
+| `text` | What the item says. Each kind below gives `text` its meaning; a topic may leave it out. |
 | `children` | Optional. The items under this one. |
 | `links` | Optional. A list of links to things outside the set, such as the evidence that a need is validated or a requirement verified. |
 | `retired` | Optional. Retired children of this item. |
@@ -120,7 +122,8 @@ links:
 
 **Nesting.** An item may hold items of its own kind, which refine it, and
 topics. A topic may hold items of every kind. A stakeholder class may also
-hold needs: the needs the class has. No kind holds another otherwise.
+hold needs: the needs the class has. No kind holds another otherwise, except
+through a topic, under which an item of any kind can sit.
 
 **Inheritance.** A child takes over the fields its kind lists as inherited
 from the nearest item above it of its own kind, unless it sets them itself; a
@@ -130,13 +133,20 @@ passed over and pass nothing on. `id`, `title`, `text`, `children`, `status`,
 describe the item itself.
 
 **Mirrors.** Every item of every set this one depends on, topics aside,
-applies here too, and each has exactly one mirror in this set. An item without
-a mirror is a warning, unless the mirror of its parent is waived; two mirrors
-of the same item are an error. Only requirements can be waived: the
-objectives, stakeholders and needs of a set this one depends on always apply.
-A mirror's `title` is the title of the item it mirrors, and a different title
-is a warning. Its `text` and its other fields say what the item means in this
-set's own context.
+applies here too, and has exactly one mirror in this set:
+
+- An item without a mirror is a warning. Nothing below a requirement mirrored
+  as waived needs a mirror of its own. Two mirrors of the same item are an
+  error.
+- Only requirements can be waived: the objectives, stakeholders and needs of a
+  set this one depends on always apply.
+- A mirror sits below the mirror of the nearest item above the one it
+  mirrors, topics passed over, and topics of this set may stand between the
+  two; a mirror elsewhere is a warning. The mirror of an item with only topics
+  above it, or nothing, may sit anywhere.
+- A mirror's `title` is the title of the item it mirrors, and a different
+  title is a warning. Its `text` and its other fields say what the item means
+  in this set's own context.
 
 ### Objective — prefix `O`
 
@@ -176,12 +186,12 @@ Inherited by children: nothing.
 
 ```yaml
 # good: a role, and what it wants from the product
-- id: S1
+- id: S3
   title: Office User
   text: Wants coffee without having to look after the machine.
 
 # bad: a person, whose interest goes when they leave
-- id: S2
+- id: S4
   title: John From Facilities
   text: Asked for the machine.
 ```
@@ -191,34 +201,34 @@ Inherited by children: nothing.
 Something stakeholder classes need from the product, in the terms of a class
 that has it. Needs are where requirements come from.
 
-A need's classes are the class it sits under, through topics, and those its
-`stakeholders` field names. A need is usually held by the one class that has
+A need's classes are the nearest class above it, through needs and topics,
+and those its `stakeholders` field names. A need is usually held by the one class that has
 it; a need that several classes share can sit under one of them and name the
 others, or sit under none and name them all.
 
 | Field | Meaning |
 |---|---|
 | `text` | The need, as the class would say it. |
-| `stakeholders` | Optional. The classes that have it, besides the one it sits under. A need with no class either way is a warning, so that a need can be written before its classes are placed. |
-| `serves` | The objectives it advances. The list may also hold the word `mission`, for a need that serves the mission directly. |
+| `stakeholders` | Optional. The classes of this set that have it, besides the nearest one above it. A need with no class either way is a warning, so that a need can be written before its classes are placed; naming the nearest class above it is a warning too, since it says it twice. |
+| `serves` | The objectives of this set it advances. The list may also hold the word `mission`, for a need that serves the mission directly. |
 | `status` | `hypothesis` until real use confirms it, then `validated`. A need found to be wrong is retired. |
 
 Inherited by children: `stakeholders`, `serves`.
 
 ```yaml
 # good: the user's words, with no solution in them
-- id: S1
+- id: S3
   title: Office User
   text: Wants coffee without having to look after the machine.
   children:
-    - id: N1.1
+    - id: N3.1
       title: Know Before Brewing
       text: Know before I brew that the tank needs water.
       serves: [O1]
       status: hypothesis
 
-# bad: a design in the system's words; the user never asked for a float
-    - id: N1.2
+    # bad: a design in the system's words; the user never asked for a float
+    - id: N3.2
       title: Float Sensor
       text: The tank has a float sensor.
       serves: [O1]
@@ -235,7 +245,7 @@ One promise the product keeps, specific enough to verify.
 | `serves` | The needs or requirements it exists for, in this set or another. Leaving it out is a warning, so that a requirement can be written before its reason is placed. |
 | `rationale` | Optional. Why the promise exists, including options considered and not taken. Requirements that rest on the same reason serve the requirement that states it. |
 | `verify` | Optional. How the promise is shown to hold: `test` (the default), `inspection`, `analysis` or `demonstration`. |
-| `status` | Where the promise stands: `draft` is written but not yet agreed; `approved` is agreed as a promise the product will keep; `implemented` means the product does it; `verified` means it has been shown to hold by its `verify` method; `waived` means it does not apply to this product. |
+| `status` | Where the promise stands, required except under a waived requirement: `draft` is written but not yet agreed; `approved` is agreed as a promise the product will keep; `implemented` means the product does it; `verified` means it has been shown to hold by its `verify` method; `waived` means it does not apply to this product. |
 
 Inherited by children: `serves`, `rationale`, `verify`.
 
@@ -269,17 +279,17 @@ method. A requirement in none of them is a warning.
 
 ```yaml
 # good: one condition, one promise, checkable by a test
-- id: R1
+- id: R7
   title: Refill Lamp
   text: When the tank becomes empty, the machine SHALL light the refill lamp.
-  serves: [N1]
+  serves: [N3.1]
   status: approved
 
 # bad: "quickly" cannot be tested, and it makes two promises in one
-- id: R2
+- id: R8
   title: Water Handling
   text: The machine SHALL detect low water quickly and alert the user.
-  serves: [N1]
+  serves: [N3.1]
   status: draft
 ```
 
@@ -291,20 +301,19 @@ explains and groups; it promises nothing and has no status.
 
 | Field | Meaning |
 |---|---|
-| `text` | Optional. The explanation, in Markdown. Without it, the topic is a heading over its children. |
+| `text` | Optional. The explanation, in Markdown. Without it, the topic is a heading over its children; a topic with neither is a warning, since it explains and groups nothing. |
 
 Inherited by children: nothing.
 
-A topic's text is Markdown as CommonMark reads it, with GitHub's tables:
-headings, paragraphs, lists, tables, code blocks, emphasis, inline code and
-links. HTML in it is shown as text. A code block marked `mermaid` is a
-diagram, such as a state machine or a sequence of messages, drawn as Mermaid
-draws it; nothing checks a diagram, so a mistake in one shows where it is
-drawn. Every other field of every item is plain text.
+A topic's text is Markdown as CommonMark reads it, with GitHub's tables. HTML
+in it is shown as text, and an image as a link to it. A code block marked
+`mermaid` is a diagram, such as a state machine or a sequence of messages,
+drawn as Mermaid draws it; nothing checks a diagram, so a mistake in one shows
+where it is drawn. Every other field in a set is plain text.
 
 ````yaml
 # good: the terms the requirements below use, before they use them
-- id: T3
+- id: T5
   title: Water Level
   text: |
     The tank is *empty* once the water is below the pump's intake, and *low*
@@ -317,14 +326,14 @@ drawn. Every other field of every item is plain text.
       Empty --> Full: refill
     ```
   children:
-    - id: R3.1
+    - id: R5.1
       title: Refill Lamp
       text: When the tank becomes empty, the machine SHALL light the refill lamp.
-      serves: [N1.1]
+      serves: [N3.1]
       status: approved
 
 # bad: a promise dressed as an explanation, which nothing traces or verifies
-- id: T4
+- id: T6
   title: Lid
   text: The lid must stay locked while a brew runs.
 ````
@@ -333,9 +342,10 @@ drawn. Every other field of every item is plain text.
 
 | Field | On | Names |
 |---|---|---|
-| `serves` | need | objectives, and the word `mission` |
-| `stakeholders` | need | stakeholder classes |
-| `serves` | requirement | needs or requirements |
+| `ranking` | mission file | objectives of this set |
+| `serves` | need | objectives of this set, and the word `mission` |
+| `stakeholders` | need | stakeholder classes of this set |
+| `serves` | requirement | needs or requirements, of this set or another |
 | `mirrors` | any item but a topic | one item of the same kind in a set this one depends on |
 
 No field names a topic. An item of another set is named `name/id`, where

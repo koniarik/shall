@@ -186,8 +186,9 @@ requirements:
             status: implemented
       - id: R26.16
         title: Topics Drawn
-        text: The server SHALL show a topic's text with its headings, lists, tables, code,
-          emphasis and links laid out, and each of its diagrams drawn.
+        text: The server SHALL show a topic's text laid out as its Markdown reads, each image as a
+          link to it and each diagram drawn.
+        rationale: The page then loads nothing from outside the server.
         serves: [N15]
         status: approved
       - id: R26.17
