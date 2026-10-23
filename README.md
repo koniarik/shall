@@ -16,8 +16,10 @@ each file also given as JSON Schema in [schema/format-1/](schema/format-1/).
 ## Running it on this repository
 
 This repository is itself a set: [shall.yaml](shall.yaml) at the root points
-to shall's own mission and requirements in `doc/requirements/`. With Go 1.27
-or newer, from the root of a checkout:
+to shall's own mission and requirements in `doc/requirements/`, published
+from `main` on each push to [read as a document](https://koniarik.github.io/shall/shall/),
+as `shall serve` shows them. With Go 1.27 or newer, from the root of a
+checkout:
 
 ```bash
 go run ./cmd/shall check
@@ -81,6 +83,17 @@ an address, it accepts connections only from this machine.
 
 The page is built from a JSON API that scripts and agents can read directly;
 [doc/api.md](doc/api.md) describes it.
+
+```text
+shall export -out dir [-base path] [directory]
+```
+
+`shall export` writes what `shall serve` would show into a new or empty
+directory, as files any web host serves as they are. The copy's page
+searches and filters as the server's does, and shows the files as they stood
+when it was written. `-base` is the path the host serves the copy under, `/`
+by default; [.github/workflows/pages.yml](.github/workflows/pages.yml)
+publishes this repository's set on GitHub Pages under `/shall/`.
 
 ## As a pre-commit hook
 

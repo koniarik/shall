@@ -1,5 +1,6 @@
-// Command shall checks a product's mission, needs and requirements, and
-// serves them as documents.
+// Command shall checks a product's mission, needs and requirements, compares
+// them between git refs, and serves them as documents or exports them as a
+// static copy.
 package main
 
 import (
@@ -22,7 +23,8 @@ import (
 
 const usage = `usage: shall check [-json] [-warnings-as-errors] [directory]
        shall diff [-json] [-base ref] [-head ref] [directory]
-       shall serve [-addr host:port] [directory]`
+       shall serve [-addr host:port] [directory]
+       shall export -out dir [-base path] [directory]`
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -40,6 +42,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 			return runDiff(args[1:], stdout, stderr)
 		case "serve":
 			return runServe(ctx, args[1:], stdout, stderr)
+		case "export":
+			return runExport(args[1:], stderr)
 		}
 	}
 	fmt.Fprintln(stderr, usage)
@@ -178,4 +182,27 @@ func writeText(w io.Writer, findings []finding.Finding, nErrors, nWarnings int) 
 		fmt.Fprintln(w, f)
 	}
 	fmt.Fprintf(w, "%d errors, %d warnings\n", nErrors, nWarnings)
+}
+
+func runExport(args []string, stderr io.Writer) int {
+	flags := flag.NewFlagSet("export", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	out := flags.String("out", "", "the directory to write the copy into, new or empty")
+	base := flags.String("base", "/", "the path a host serves the copy under")
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	root, ok := directory(flags, stderr)
+	if !ok {
+		return 2
+	}
+	if *out == "" {
+		fmt.Fprintln(stderr, "shall: export needs -out, the directory to write the copy into")
+		return 2
+	}
+	if err := serve.Export(root, *out, *base); err != nil {
+		fmt.Fprintln(stderr, "shall:", err)
+		return 2
+	}
+	return 0
 }

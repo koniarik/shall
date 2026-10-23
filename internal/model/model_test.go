@@ -362,3 +362,49 @@ items:
 		t.Errorf("a requirement below a waived one: effective status %q, want waived", got)
 	}
 }
+
+func TestCitationsAreReferences(t *testing.T) {
+	t.Attr("verifies", "R27.2")
+	s := parse(t, map[string]string{
+		"mission.shall.yaml": "title: M\nmission: Coffee, as [O1] says.\nitems:\n  - {id: O1, title: A, text: t, measure: 'see [T3]'}\n",
+		"c.shall.yaml": `title: C
+items:
+  - id: R2
+    title: A
+    text: The tool SHALL do what [T3] and [company/R1] describe.
+    rationale: Because of [O1], not [R9 is no citation].
+    notes:
+      - Compare [T3].
+    status: draft
+  - id: T3
+    title: Terms
+    text: |
+      A *brew* is one cup, as [O1] counts it; ` + "`[R2]`" + ` is code.
+
+      ` + "```" + `
+      [R2] in a code block
+      ` + "```" + `
+`,
+	})
+	var got []string
+	for _, it := range s.Items {
+		for _, r := range it.Refs() {
+			if r.Citation {
+				got = append(got, it.ID+"."+r.Field+">"+r.ID)
+			}
+		}
+	}
+	if want := "O1.measure>T3 R2.text>T3 R2.text>company/R1 R2.rationale>O1 R2.notes>T3 T3.text>O1"; strings.Join(got, " ") != want {
+		t.Errorf("citations = %s, want %s: every prose field cites, code does not", strings.Join(got, " "), want)
+	}
+	var named []string
+	for _, r := range s.NamedBy("T3") {
+		named = append(named, r.From.ID+"."+r.Field)
+	}
+	if want := "O1.measure R2.text R2.notes"; strings.Join(named, " ") != want {
+		t.Errorf("NamedBy(T3) = %s, want %s", strings.Join(named, " "), want)
+	}
+	if m := s.MissionCites(); len(m) != 1 || m[0].ID != "O1" || m[0].From != nil {
+		t.Errorf("MissionCites() = %+v, want O1, cited by no item", m)
+	}
+}

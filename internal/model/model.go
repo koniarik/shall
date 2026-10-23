@@ -6,9 +6,11 @@ package model
 import (
 	"cmp"
 	"path"
+	"regexp"
 	"slices"
 	"strings"
 
+	"shall/internal/markdown"
 	"shall/internal/set"
 	"shall/internal/tree"
 )
@@ -196,6 +198,55 @@ func (it *Item) Refs() []Ref {
 	if it.Kind != 'T' {
 		add("mirrors", it.Node.Get("mirrors"))
 	}
+	for _, field := range []string{"text", "measure", "rationale"} {
+		n := it.Node.Get(field)
+		s, ok := n.Str()
+		if !ok {
+			continue
+		}
+		texts := []string{s}
+		if it.Kind == 'T' && field == "text" {
+			texts = markdown.Prose(s)
+		}
+		for _, text := range texts {
+			out = append(out, citations(it, it.File, field, n, text)...)
+		}
+	}
+	if notes := it.Node.Get("notes"); notes != nil && notes.Kind == tree.Seq {
+		for _, n := range notes.Items {
+			if s, ok := n.Str(); ok {
+				out = append(out, citations(it, it.File, "notes", n, s)...)
+			}
+		}
+	}
+	return out
+}
+
+// citation matches an id cited in a text, in square brackets: [T2], or
+// [company/R1] for an item of another set.
+var citation = regexp.MustCompile(`\[((?:[a-z][a-z0-9-]*/)?[OSNRT][0-9]+(?:\.[0-9]+)*)\]`)
+
+// Cite is one citation in a text: the id cited, and where the citation,
+// brackets included, starts and ends.
+type Cite struct {
+	ID         string
+	Start, End int
+}
+
+// Cites returns the citations in a text, in order.
+func Cites(text string) []Cite {
+	var out []Cite
+	for _, m := range citation.FindAllStringSubmatchIndex(text, -1) {
+		out = append(out, Cite{ID: text[m[2]:m[3]], Start: m[0], End: m[1]})
+	}
+	return out
+}
+
+func citations(from *Item, f *File, field string, n *tree.Node, text string) []Ref {
+	var out []Ref
+	for _, c := range Cites(text) {
+		out = append(out, Ref{From: from, File: f, Field: field, ID: c.ID, Node: n, Citation: true})
+	}
 	return out
 }
 
@@ -211,12 +262,15 @@ type Retired struct {
 
 // Ref is one id named in a field.
 type Ref struct {
-	// From is the item that names the id, or nil for the ranking.
+	// From is the item that names the id, or nil for the ranking and the
+	// mission statement.
 	From  *Item
 	File  *File
 	Field string
 	ID    string
 	Node  *tree.Node
+	// Citation tells an id cited in a text from one a field names.
+	Citation bool
 }
 
 // Set is one set's files and the items they hold.
@@ -355,6 +409,21 @@ func (s *Set) RetiredWith(id string) *Retired {
 
 // NamedBy returns every reference to id from an item, in reading order.
 func (s *Set) NamedBy(id string) []Ref { return s.named[id] }
+
+// MissionCites returns the ids the mission statement cites.
+func (s *Set) MissionCites() []Ref {
+	var out []Ref
+	for _, f := range s.Files {
+		if !f.Mission || f.Tree == nil {
+			continue
+		}
+		n := f.Tree.Get("mission")
+		if text, ok := n.Str(); ok {
+			out = append(out, citations(nil, f, "mission", n, text)...)
+		}
+	}
+	return out
+}
 
 // Ranking returns the objective ids the mission file ranks, highest first.
 func (s *Set) Ranking() []Ref {

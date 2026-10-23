@@ -37,8 +37,8 @@ var refKinds = map[string]string{
 // local are the fields that name items of their own set only.
 var local = map[string]bool{"ranking": true, "N stakeholders": true, "N serves": true}
 
-// kinds are the letters of the kinds of item.
-const kinds = "OSNRT"
+// itemKinds are the letters of the kinds of item.
+const itemKinds = "OSNRT"
 
 // Check returns the findings of the within-set rules for the set s, whose
 // manifest is at manifestPath.
@@ -50,6 +50,9 @@ func Check(manifestPath string, manifest *tree.Node, s *model.Set) []finding.Fin
 	c.checkIDs()
 	for _, r := range s.Ranking() {
 		c.ref(r, "ranking")
+	}
+	for _, r := range s.MissionCites() {
+		c.ref(r, "mission")
 	}
 	for _, it := range s.Items {
 		c.checkItem(it)
@@ -144,7 +147,7 @@ func isChildOf(path, parent string) bool {
 // nests tells whether an item of kind child may sit right under one of kind
 // parent. A kind the format does not have is reported by the schema.
 func nests(parent, child byte) bool {
-	if !strings.ContainsRune(kinds, rune(parent)) || !strings.ContainsRune(kinds, rune(child)) {
+	if !strings.ContainsRune(itemKinds, rune(parent)) || !strings.ContainsRune(itemKinds, rune(child)) {
 		return true
 	}
 	return parent == child || parent == 'T' || child == 'T' || parent == 'S' && child == 'N'
@@ -159,26 +162,31 @@ func holds(kind byte) string {
 }
 
 // ref checks one reference; key names the field, after the kind of item
-// that writes it.
+// that writes it. A citation may name an item of any kind, here or in a set
+// the manifest depends on, and what it gets wrong is a warning.
 func (c *checker) ref(r model.Ref, key string) {
 	from := ""
 	if r.From != nil {
 		from = r.From.ID
 	}
+	kinds, onlyHere, sev := refKinds[key], local[key], finding.Error
+	if r.Citation {
+		kinds, onlyHere, sev = itemKinds, false, finding.Warning
+	}
 	file, line, id := r.File.Path, r.Node.Line, r.ID
 	if strings.Contains(id, "/") {
 		name, _, _ := strings.Cut(id, "/")
 		switch {
-		case local[key]:
-			c.add(finding.Error, file, line, from, r.Field, "%s names another set; %s names items of this set only", id, r.Field)
+		case onlyHere:
+			c.add(sev, file, line, from, r.Field, "%s names another set; %s names items of this set only", id, r.Field)
 		case !c.depends[name]:
-			c.add(finding.Error, file, line, from, r.Field, "%s names set %q, which the manifest does not depend on", id, name)
+			c.add(sev, file, line, from, r.Field, "%s names set %q, which the manifest does not depend on", id, name)
 		}
 		return
 	}
 	if e := c.set.RetiredWith(id); e != nil {
 		if model.Path(e.ID) == model.Path(id) && e.ID != id {
-			c.add(finding.Error, file, line, from, r.Field, "%s names the path of %s, retired at %s:%d; the letter does not match", id, e.ID, e.File.Path, e.Line)
+			c.add(sev, file, line, from, r.Field, "%s names the path of %s, retired at %s:%d; the letter does not match", id, e.ID, e.File.Path, e.Line)
 			return
 		}
 		c.add(finding.Warning, file, line, from, r.Field, "%s is retired, at %s:%d", id, e.File.Path, e.Line)
@@ -187,14 +195,14 @@ func (c *checker) ref(r model.Ref, key string) {
 	target := c.set.Item(id)
 	if target == nil {
 		if other := c.set.AtPath(id); other != nil {
-			c.add(finding.Error, file, line, from, r.Field, "%s names the path of %s, at %s:%d; the letter does not match", id, other.ID, other.File.Path, other.Node.Line)
+			c.add(sev, file, line, from, r.Field, "%s names the path of %s, at %s:%d; the letter does not match", id, other.ID, other.File.Path, other.Node.Line)
 			return
 		}
-		c.add(finding.Error, file, line, from, r.Field, "%s is no item of this set", id)
+		c.add(sev, file, line, from, r.Field, "%s is no item of this set", id)
 		return
 	}
-	if !strings.ContainsRune(refKinds[key], rune(target.Kind)) {
-		c.add(finding.Error, file, line, from, r.Field, "%s cannot be named in %s", id, r.Field)
+	if !strings.ContainsRune(kinds, rune(target.Kind)) {
+		c.add(sev, file, line, from, r.Field, "%s cannot be named in %s", id, r.Field)
 	}
 }
 

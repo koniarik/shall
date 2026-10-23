@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"shall/internal/dot"
 	"shall/internal/finding"
 	"shall/internal/markdown"
 	"shall/internal/model"
@@ -95,6 +96,9 @@ type setAnswer struct {
 	// Files are the mission file, with its items, then the chapters, without
 	// theirs.
 	Files []*fileJSON `json:"files"`
+	// Depends gives, for each name the manifest gives a set it depends on,
+	// the name of the served set it names.
+	Depends map[string]string `json:"depends,omitempty"`
 }
 
 type fileJSON struct {
@@ -110,6 +114,8 @@ type fileJSON struct {
 	Ranking  []refJSON         `json:"ranking,omitempty"`
 	Items    []*itemJSON       `json:"items,omitempty"`
 	Retired  []retiredJSON     `json:"retired,omitempty"`
+	// Cites holds the mission statement when it cites an id.
+	Cites *citesJSON `json:"cites,omitempty"`
 }
 
 // counts are the items a file holds, the findings shown in it, and its
@@ -128,13 +134,6 @@ type fileAnswer struct {
 type itemAnswer struct {
 	Version string `json:"version"`
 	*itemJSON
-}
-
-type resolveAnswer struct {
-	Version string  `json:"version"`
-	Ref     refJSON `json:"ref"`
-	// Message says why the id names no item.
-	Message string `json:"message,omitempty"`
 }
 
 type searchAnswer struct {
@@ -162,9 +161,6 @@ type itemJSON struct {
 	Text  string `json:"text"`
 	File  string `json:"file"`
 	Line  int    `json:"line"`
-	// Context marks a requirement or topic shown only because an item below
-	// it matches the statuses asked for.
-	Context bool `json:"context,omitempty"`
 	// Status is the status as written; EffectiveStatus is a requirement's
 	// lowest status counting its children.
 	Status          string            `json:"status,omitempty"`
@@ -184,8 +180,21 @@ type itemJSON struct {
 	// Requirements counts a topic's requirements, all below it, by effective
 	// status.
 	Requirements *statusCounts `json:"requirements,omitempty"`
-	// Blocks are a topic's text read as Markdown.
+	// Blocks are a topic's text read as Markdown, each id it cites a ref
+	// run.
 	Blocks []markdown.Block `json:"blocks,omitempty"`
+	// Cites are the item's prose fields that cite, as runs of text and refs.
+	Cites *citesJSON `json:"cites,omitempty"`
+}
+
+// citesJSON holds each prose field that cites an id, as runs of text and
+// refs; a field that cites none is left out.
+type citesJSON struct {
+	Text      []markdown.Inline   `json:"text,omitempty"`
+	Measure   []markdown.Inline   `json:"measure,omitempty"`
+	Rationale []markdown.Inline   `json:"rationale,omitempty"`
+	Notes     [][]markdown.Inline `json:"notes,omitempty"`
+	Mission   []markdown.Inline   `json:"mission,omitempty"`
 }
 
 // refJSON is what an id written in a field names.
@@ -278,19 +287,22 @@ func (b builder) set() setAnswer {
 	}
 	if b.sv.Set != nil {
 		for _, f := range b.sv.Set.Files {
-			v := b.file(f, f.Mission, nil)
+			v := b.file(f, f.Mission)
 			a.Requirements.addAll(v.Counts.Requirements)
 			a.Files = append(a.Files, v)
 		}
 	}
+	for name, dep := range b.sv.deps {
+		if a.Depends == nil {
+			a.Depends = map[string]string{}
+		}
+		a.Depends[name] = dep.Name
+	}
 	return a
 }
 
-// file returns a file's answer, with its items when withItems is true. When
-// statuses names any, only the requirements at one of those effective
-// statuses come of the requirements, with the requirements and topics above
-// them as context.
-func (b builder) file(f *model.File, withItems bool, statuses map[string]bool) *fileJSON {
+// file returns a file's answer, with its items when withItems is true.
+func (b builder) file(f *model.File, withItems bool) *fileJSON {
 	v := &fileJSON{
 		Path: f.Path, Kind: "chapter", Broken: f.Tree == nil,
 		Counts: b.count(f), Findings: orEmpty(b.sv.onFile[f]),
@@ -305,6 +317,9 @@ func (b builder) file(f *model.File, withItems bool, statuses map[string]bool) *
 	v.Retired = retiredList(f.Retired)
 	if f.Mission {
 		v.Mission, _ = f.Tree.Get("mission").Str()
+		if runs := b.runs(v.Mission); runs != nil {
+			v.Cites = &citesJSON{Mission: runs}
+		}
 		for _, r := range b.sv.Set.Ranking() {
 			if r.File == f {
 				v.Ranking = append(v.Ranking, b.ref(r.ID))
@@ -315,42 +330,9 @@ func (b builder) file(f *model.File, withItems bool, statuses map[string]bool) *
 		return v
 	}
 	for _, it := range f.Items {
-		j := b.item(it)
-		if len(statuses) > 0 {
-			if j = filter(j, statuses); j == nil {
-				continue
-			}
-		}
-		v.Items = append(v.Items, j)
+		v.Items = append(v.Items, b.item(it))
 	}
 	return v
-}
-
-// filter returns an item's answer cut down to the requirements at one of
-// statuses, with the requirements and topics above them, or nil when none
-// is below it. Items of the other kinds stay, their children filtered.
-func filter(it *itemJSON, statuses map[string]bool) *itemJSON {
-	var kept []*itemJSON
-	for _, c := range it.Children {
-		if c = filter(c, statuses); c != nil {
-			kept = append(kept, c)
-		}
-	}
-	switch it.Kind {
-	case "requirement":
-		matches := statuses[it.EffectiveStatus]
-		if !matches && kept == nil {
-			return nil
-		}
-		it.Context = !matches
-	case "topic":
-		if kept == nil {
-			return nil
-		}
-		it.Context = true
-	}
-	it.Children = kept
-	return it
 }
 
 // count returns the number of items in a file, of findings shown in it, and
@@ -396,7 +378,7 @@ func (b builder) item(it *model.Item) *itemJSON {
 		v.Verify, _ = n.Get("verify").Str()
 	case 'T':
 		if v.Text != "" {
-			v.Blocks = markdown.Blocks(v.Text)
+			v.Blocks = drawn(b.cited(markdown.Blocks(v.Text)))
 		}
 		v.Requirements = &statusCounts{}
 		var below func(*model.Item)
@@ -443,6 +425,21 @@ func (b builder) item(it *model.Item) *itemJSON {
 	}
 	for _, r := range b.sv.Set.NamedBy(it.ID) {
 		v.NamedBy = append(v.NamedBy, namedByJSON{Field: r.Field, refJSON: b.refIn(b.sv, r.From.ID, r.From.ID)})
+	}
+	c := citesJSON{Measure: b.runs(v.Measure), Rationale: b.runs(v.Rationale)}
+	if it.Kind != 'T' {
+		c.Text = b.runs(v.Text)
+	}
+	for i, note := range v.Notes {
+		if runs := b.runs(note); runs != nil {
+			if c.Notes == nil {
+				c.Notes = make([][]markdown.Inline, len(v.Notes))
+			}
+			c.Notes[i] = runs
+		}
+	}
+	if c.Text != nil || c.Measure != nil || c.Rationale != nil || c.Notes != nil {
+		v.Cites = &c
 	}
 	v.Retired = retiredList(it.Retired)
 	for _, c := range it.Children {
@@ -491,7 +488,7 @@ func (b builder) resolve(id string) (refJSON, string) {
 func (b builder) search(q string) searchAnswer {
 	a := searchAnswer{Version: b.snap.version, Query: q, Results: []searchResult{}}
 	words := strings.Fields(strings.ToLower(q))
-	if len(words) == 0 || b.sv.Set == nil {
+	if len(words) == 0 {
 		return a
 	}
 	var exact refJSON
@@ -511,8 +508,12 @@ func (b builder) search(q string) searchAnswer {
 		}
 		return true
 	}
+	var items []*model.Item
+	if b.sv.Set != nil {
+		items = b.sv.Set.Items
+	}
 	var byMatch [2][]*model.Item
-	for _, it := range b.sv.Set.Items {
+	for _, it := range items {
 		switch {
 		case b.sv.Set.Item(it.ID) != it, exact.State == "item" && exact.Set == b.sv.Name && it.ID == cmp.Or(exact.ItemID, exact.ID):
 		case holds(it.ID + " " + it.Title()):
@@ -537,6 +538,87 @@ func (b builder) search(q string) searchAnswer {
 		}
 	}
 	return a
+}
+
+// runs returns a text that cites as runs of text and refs, or nil when it
+// cites nothing.
+func (b builder) runs(text string) []markdown.Inline {
+	cites := model.Cites(text)
+	if len(cites) == 0 {
+		return nil
+	}
+	var out []markdown.Inline
+	at := 0
+	for _, c := range cites {
+		if c.Start > at {
+			out = append(out, markdown.Inline{Type: "text", Text: text[at:c.Start]})
+		}
+		r := b.ref(c.ID)
+		out = append(out, markdown.Inline{Type: "ref", Ref: &r})
+		at = c.End
+	}
+	if at < len(text) {
+		out = append(out, markdown.Inline{Type: "text", Text: text[at:]})
+	}
+	return out
+}
+
+// drawn returns blocks with each DOT diagram drawn, or the reason it cannot
+// be; Mermaid's are drawn in the page.
+func drawn(blocks []markdown.Block) []markdown.Block {
+	for i := range blocks {
+		bl := &blocks[i]
+		if bl.Type == "diagram" && bl.Language == "dot" {
+			svg, err := dot.SVG(bl.Text)
+			if err != nil {
+				bl.Error = err.Error()
+			}
+			bl.SVG = svg
+		}
+		for j := range bl.Items {
+			bl.Items[j] = drawn(bl.Items[j])
+		}
+		bl.Blocks = drawn(bl.Blocks)
+	}
+	return blocks
+}
+
+// cited returns blocks with each id their text cites made a ref run.
+func (b builder) cited(blocks []markdown.Block) []markdown.Block {
+	var inline func([]markdown.Inline) []markdown.Inline
+	inline = func(list []markdown.Inline) []markdown.Inline {
+		var out []markdown.Inline
+		for _, x := range list {
+			switch x.Type {
+			case "text":
+				if runs := b.runs(x.Text); runs != nil {
+					out = append(out, runs...)
+					continue
+				}
+			case "emphasis", "strong", "link":
+				x.Inline = inline(x.Inline)
+			}
+			out = append(out, x)
+		}
+		return out
+	}
+	for i := range blocks {
+		bl := &blocks[i]
+		bl.Inline = inline(bl.Inline)
+		for j := range bl.Items {
+			bl.Items[j] = b.cited(bl.Items[j])
+		}
+		bl.Blocks = b.cited(bl.Blocks)
+		for j := range bl.Head {
+			bl.Head[j] = inline(bl.Head[j])
+		}
+		for _, row := range bl.Rows {
+			for j := range row {
+				row[j] = inline(row[j])
+			}
+		}
+	}
+	return blocks
 }
 
 func retiredList(entries []*model.Retired) []retiredJSON {

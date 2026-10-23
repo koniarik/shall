@@ -118,14 +118,18 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/sets/{set}", s.apiSet)
 	mux.HandleFunc("GET /api/sets/{set}/files/{path...}", s.apiFile)
 	mux.HandleFunc("GET /api/sets/{set}/items/{id}", s.apiItem)
-	mux.HandleFunc("GET /api/sets/{set}/resolve", s.apiResolve)
 	mux.HandleFunc("GET /api/sets/{set}/search", s.apiSearch)
 	mux.HandleFunc("GET /api/events", s.events)
 	return s.guard(mux)
 }
 
-// policy is the Content-Security-Policy of every answer.
-const policy = "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+// pagePolicy is what the page may load and run; policy, the
+// Content-Security-Policy of every answer, also keeps the page out of
+// frames, which a static copy's page cannot say of itself.
+const (
+	pagePolicy = "default-src 'self'; style-src 'self' 'unsafe-inline'"
+	policy     = pagePolicy + "; frame-ancestors 'none'"
+)
 
 func (s *Server) guard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -218,11 +222,7 @@ func (s *Server) apiFile(w http.ResponseWriter, r *http.Request) {
 		problem(w, errorAnswer{Error: fmt.Sprintf("No file of %s has the path %s.", sv.Name, r.PathValue("path"))})
 		return
 	}
-	statuses := map[string]bool{}
-	for _, s := range r.URL.Query()["status"] {
-		statuses[s] = true
-	}
-	writeJSON(w, http.StatusOK, fileAnswer{Version: snap.version, fileJSON: builder{snap, sv}.file(f, true, statuses)})
+	writeJSON(w, http.StatusOK, fileAnswer{Version: snap.version, fileJSON: builder{snap, sv}.file(f, true)})
 }
 
 func (s *Server) apiItem(w http.ResponseWriter, r *http.Request) {
@@ -243,17 +243,6 @@ func (s *Server) apiItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	problem(w, errorAnswer{Error: fmt.Sprintf("No item of %s has the id %s.", sv.Name, id)})
-}
-
-// apiResolve says what an id names, as a reader would enter it: an id of
-// the set, or name/id of another, in any case.
-func (s *Server) apiResolve(w http.ResponseWriter, r *http.Request) {
-	snap, sv := s.set(w, r)
-	if sv == nil {
-		return
-	}
-	ref, message := builder{snap, sv}.resolve(strings.TrimSpace(r.URL.Query().Get("id")))
-	writeJSON(w, http.StatusOK, resolveAnswer{Version: snap.version, Ref: ref, Message: message})
 }
 
 // apiSearch lists the items whose id, title or text holds every word asked

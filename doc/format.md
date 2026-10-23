@@ -308,8 +308,9 @@ Inherited by children: nothing.
 A topic's text is Markdown as CommonMark reads it, with GitHub's tables. HTML
 in it is shown as text, and an image as a link to it. A code block marked
 `mermaid` is a diagram, such as a state machine or a sequence of messages,
-drawn as Mermaid draws it; nothing checks a diagram, so a mistake in one shows
-where it is drawn. Every other field in a set is plain text.
+drawn as Mermaid draws it, and one marked `dot` a graph drawn as Graphviz
+draws it. Nothing checks a diagram, so a mistake in one shows where it is
+drawn. Every other field in a set is plain text.
 
 ````yaml
 # good: the terms the requirements below use, before they use them
@@ -352,6 +353,21 @@ No field names a topic. An item of another set is named `name/id`, where
 `name` is the name the manifest gives that set under `depends`. A standard
 that every product of a company or a department meets is a set of its own,
 which each product depends on and mirrors.
+
+**Citations.** A text cites an item by its id in square brackets: `[T2]`, or
+`[company/R1]` for an item of a set this one depends on.
+
+- Every prose field can cite: an item's `text`, `measure`, `rationale` and
+  `notes`, and the mission statement. Code in a topic's Markdown does not.
+- A citation can name an item of any kind, topics included, and counts as
+  naming it.
+- A citation that names no item, a retired one, an item under another
+  letter, or a set the manifest does not depend on is a warning.
+- A range is written as its two ends, each cited: `[R8.1.2]–[R8.1.4]`.
+
+YAML reads a `[` that begins a value, or that stands anywhere in a value
+written within braces, as the start of a list; such a value goes in quotes:
+`text: "[T2] defines it."`.
 
 ## Errors and warnings
 

@@ -28,9 +28,8 @@ The examples below are the answers for the example set at the end of
 |---|---|
 | `GET /api/sets` | The sets served, with their error and warning counts and their requirements by status |
 | `GET /api/sets/{set}` | One set: its findings, its mission file with its items, and its chapters without theirs |
-| `GET /api/sets/{set}/files/{path}` | One file with its items, filtered by status on request |
+| `GET /api/sets/{set}/files/{path}` | One file with its items |
 | `GET /api/sets/{set}/items/{id}` | One item with its children |
-| `GET /api/sets/{set}/resolve?id={id}` | What an id names, as a reader would type it |
 | `GET /api/sets/{set}/search?q={words}` | The items an id or words name |
 | `GET /api/events` | A stream of versions, one each time the files change |
 
@@ -62,12 +61,12 @@ What the server works out:
 | Field | Meaning |
 |---|---|
 | `effectiveStatus` | A requirement's lowest status, counting the requirements below it, as [format.md](format.md) defines it |
-| `namedBy` | The items that name this one, each a reference with the `field` that names it |
+| `namedBy` | The items that name or cite this one, each a reference with the `field` that names or cites it |
+| `cites` | Its prose fields that cite an id, `text`, `measure`, `rationale` and `notes` (one entry per note), and on the mission file `mission`, each as runs: `text` runs, and `ref` runs that carry a `ref` |
 | `findings` | The findings of `shall check` that concern this item |
 | `children` | The item's children, of every kind, in full |
 | `requirements` | A topic's requirements, all below it, by effective status |
 | `blocks` | A topic's text read as Markdown, as below |
-| `context` | Set on a requirement or topic shown only because an item below it matches the statuses a file was asked for |
 
 A topic's `blocks` are its text as blocks of text, each with a `type`:
 
@@ -78,7 +77,7 @@ A topic's `blocks` are its text as blocks of text, each with a `type`:
 | `list` | `ordered`, `start` when ordered, and `items`, each a list of blocks |
 | `quote` | `blocks` |
 | `code` | `language` as its fence names it, and `text` |
-| `diagram` | `text`, the Mermaid source of a code block marked `mermaid` |
+| `diagram` | `language`, `mermaid` or `dot`, as the code block is marked, and `text`, its source; a `dot` diagram also carries `svg`, the server's drawing with only its shapes, text and styles, or `error`, why Graphviz cannot draw it |
 | `table` | `align` per column (`left`, `center`, `right` or none), `head`, a list of cells, and `rows`, each a list of cells; a cell is a list of `inline` |
 | `rule` | nothing more |
 | `html` | `text`, the HTML as written, to be shown as text |
@@ -86,7 +85,8 @@ A topic's `blocks` are its text as blocks of text, each with a `type`:
 Within a block, `inline` is a list of runs, each with a `type`: `text` and
 `code` carry `text`; `emphasis` and `strong` carry `inline`; `link` carries
 `url`, `title` when it has one, and `inline`, an image coming as a link to
-it; `break` carries nothing. HTML within a line comes as `text`.
+it; `break` carries nothing; `ref`, an id the text cites, carries `ref`, a
+reference. HTML within a line comes as `text`.
 
 ## `GET /api/sets`
 
@@ -130,6 +130,9 @@ counts the set's requirements by effective status, as each file's `counts`
 does for the file. `findings` at the
 top are those that concern no file of the set, such as the manifest's. A file
 that cannot be read or parsed has `"broken": true` and its findings.
+`depends` gives, for each name the manifest's `depends` gives a set the
+server serves, that set's own name, such as `{"company": "acme-standards"}`;
+it is left out when there is none.
 
 ```json
 {
@@ -272,11 +275,6 @@ that cannot be read or parsed has `"broken": true` and its findings.
 ## `GET /api/sets/{set}/files/{path}`
 
 One file with its items in reading order, children nested.
-
-`?status=` once or more, such as `?status=draft&status=approved`, keeps only
-the requirements at one of those effective statuses, with the requirements
-and topics above them as context, marked `"context": true`. Items of the
-other kinds stay.
 
 ```json
 {
@@ -431,48 +429,20 @@ A retired id is answered with 404, the error, and the entry that retired it:
 }
 ```
 
-## `GET /api/sets/{set}/resolve?id={id}`
-
-What an id names, as a reader would type it: an id of the set, or `name/id`
-of another, where `name` is a name the manifest gives under `depends` or the
-name of a set the server serves. Ids are matched exactly first, then in
-capitals. The answer is always 200; a `message` says why an id names no item.
-
-```json
-{
-  "version": "dm7japskbab4.1",
-  "ref": {
-    "id": "r3.1",
-    "state": "item",
-    "set": "coffee",
-    "itemId": "R3.1",
-    "title": "Refill Lamp",
-    "file": "requirements/01-tank.shall.yaml"
-  }
-}
-```
-
-```json
-{
-  "version": "dm7japskbab4.1",
-  "ref": {
-    "id": "R4",
-    "state": "retired",
-    "set": "coffee",
-    "title": "Water Handling"
-  },
-  "message": "R4 was retired at requirements/01-tank.shall.yaml:27."
-}
-```
-
 ## `GET /api/sets/{set}/search?q={words}`
 
-What a reader typed names. A single word that names an item as an id, as
-`resolve` reads it, comes first with `"match": "id"`. Then come the items of
-the set whose id or title holds every word, with `"match": "title"`, and
-those whose text does, with `"match": "text"`, each group in reading order,
-ignoring case. At most 50 are listed, and `more` counts the rest. When
-nothing is found, `message` says why.
+What a reader typed names. A single word that names an item as an id comes
+first with `"match": "id"`: an id of the set, or `name/id` of another, where
+`name` is a name the manifest gives under `depends` or the name of a set the
+server serves, matched exactly first and then in capitals. Then come the
+items of the set whose id or title holds every word, with `"match":
+"title"`, and those whose text does, with `"match": "text"`, each group in
+reading order, ignoring case. At most 50 are listed, and `more` counts the
+rest.
+
+When nothing is found, `message` says why: that no item holds the words, or,
+for a word written as an id or as `name/id` and for a retired id, what the
+id names.
 
 ```json
 {
@@ -499,6 +469,15 @@ nothing is found, `message` says why.
 }
 ```
 
+```json
+{
+  "version": "dm7japskbab4.1",
+  "query": "R4",
+  "results": [],
+  "message": "R4 was retired at requirements/01-tank.shall.yaml:27."
+}
+```
+
 ## `GET /api/events`
 
 A stream of [server-sent events](https://html.spec.whatwg.org/multipage/server-sent-events.html).
@@ -512,3 +491,35 @@ data: dm7japskbab4.1
 
 A client that sees a version other than the one its answers carry fetches
 them again.
+
+## A static copy
+
+`shall export -out site [-base path] [directory]` writes into `site`, which
+must be new or empty, every answer above that stays the same while the files
+do, each as a file named by its address with `.json` added:
+
+- `api/sets.json`;
+- `api/sets/{set}.json`;
+- `api/sets/{set}/files/{path}.json`;
+- `api/sets/{set}/items/{id}.json`, also for each retired id, holding the
+  404 answer the server would send.
+
+A set's folders are named by its name as it is; a name that cannot name a
+folder, such as one holding `/`, fails the export. An id has a file when it
+names an item or is retired itself. The server also answers an id retired
+only with an ancestor, or written with another letter at a retired path;
+in a copy such an id has no file, and the page says no item has it.
+
+Their `version` is `copy`. Search and events have no files: the copy's page
+searches the copy's files as the server would, reading `depends` in the set's
+answer for the names it gives other sets, and nothing changes while it is
+open.
+
+The page is at every address a reader can open: `index.html` for the start,
+`{set}/index.html` for each set and `{set}/{id}.html` for each item. Any
+other address is answered by `404.html`, which a host such as GitHub Pages
+serves for addresses it lacks. `-base` is the path the host serves the copy
+under, `/` by default; GitHub Pages serves a project's site under
+`/{repository}/`. A static host sends no headers of the copy's choosing, so
+the page carries its policy in a meta tag, which cannot keep it out of
+frames.

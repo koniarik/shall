@@ -4,7 +4,15 @@
 // text into the page only as text. It keeps the reader's choices about the
 // view in the page address, except the colour scheme, which the browser
 // keeps.
+//
+// The same script reads a static copy, which shall export writes: there the
+// answers are files, nothing changes while the page is open, and search
+// runs in the page.
 'use strict';
+
+// Where the page is served from, and whether it reads a static copy.
+const base = document.querySelector('meta[name="shall-base"]')?.content || '/';
+const copy = Boolean(document.querySelector('meta[name="shall-static"]'));
 
 const body = document.body;
 const main = document.getElementById('main');
@@ -49,9 +57,20 @@ function plural(n, word) {
 
 // The page address.
 
+// route reads the set and the target from the page address. An address of
+// a static copy may name the page's file: index.html, or the target with
+// .html added.
 function route() {
-  const parts = location.pathname.split('/').filter(Boolean).map(decodeURIComponent);
-  return {set: parts[0] ?? '', target: parts[1] ?? ''};
+  const path = location.pathname.startsWith(base) ? location.pathname.slice(base.length) : location.pathname;
+  const parts = path.split('/').filter(Boolean).map((p) => {
+    try {
+      return decodeURIComponent(p);
+    } catch {
+      return p;
+    }
+  });
+  if (parts.at(-1) === 'index.html') parts.pop();
+  return {set: parts[0] ?? '', target: (parts[1] ?? '').replace(/\.html$/, '')};
 }
 
 function query() {
@@ -74,35 +93,35 @@ function record(name, value, on) {
 }
 
 function setBase(name) {
-  return '/' + encodeURIComponent(name) + '/';
+  return base + encodeURIComponent(name) + '/';
 }
 
-// The API.
+// The API. A resource is named by its path within the API, which apiURL
+// turns into an address: the server's, or a file of a static copy.
 
 function apiSet(name) {
-  return '/api/sets/' + encodeURIComponent(name);
+  return 'sets/' + encodeURIComponent(name);
 }
 
 function apiFile(name, path) {
   return apiSet(name) + '/files/' + path.split('/').map(encodeURIComponent).join('/');
 }
 
-// apiChapter returns the API's address of a chapter, filtered by the
-// statuses the address chooses.
-function apiChapter(name, path) {
-  const q = new URLSearchParams();
-  for (const s of query().getAll('status')) q.append('status', s);
-  return address(apiFile(name, path), q);
-}
-
 function apiItem(name, id) {
   return apiSet(name) + '/items/' + encodeURIComponent(id);
 }
 
-async function api(url) {
+function apiURL(path) {
+  return base + 'api/' + path + (copy ? '.json' : '');
+}
+
+// api fetches a resource; an answer that says what is missing is not ok,
+// which a static copy can only say in its body.
+async function api(path) {
   try {
-    const r = await fetch(url);
-    return {ok: r.ok, body: await r.json()};
+    const r = await fetch(apiURL(path));
+    const body = await r.json();
+    return {ok: r.ok && !body?.error, body};
   } catch {
     return {ok: false, body: null};
   }
@@ -215,7 +234,7 @@ function block(b, level) {
           h('tbody', {}, b.rows.map((row) => h('tr', {},
               row.map((c, i) => h('td', {class: b.align?.[i] ? 'align-' + b.align[i] : null}, inline(c)))))));
     case 'diagram':
-      return diagram(b.text);
+      return b.language === 'dot' ? dotDiagram(b) : diagram(b.text);
     default:
       return h('p', {}, inline(b.inline ?? []));
   }
@@ -232,6 +251,8 @@ function inline(list) {
         return h('code', {}, x.text);
       case 'break':
         return h('br', {});
+      case 'ref':
+        return ref(x.ref);
       case 'link': {
         const url = safeURL(x.url);
         return url ? h('a', {href: url, title: x.title || null, target: '_blank', rel: 'noreferrer'}, inline(x.inline)) :
@@ -254,7 +275,7 @@ let drawn = 0;
 
 function loadMermaid() {
   mermaidLoaded ??= new Promise((resolve, reject) => {
-    const s = h('script', {src: '/-/static/mermaid/mermaid.min.js'});
+    const s = h('script', {src: base + '-/static/mermaid/mermaid.min.js'});
     s.addEventListener('load', () => resolve(window.mermaid));
     s.addEventListener('error', () => reject(new Error('Mermaid did not load')));
     document.head.append(s);
@@ -291,42 +312,54 @@ function draw(el) {
 }
 
 function redraw() {
-  for (const el of main.querySelectorAll('figure.diagram')) draw(el);
+  for (const el of main.querySelectorAll('figure.diagram:not(.dot)')) draw(el);
+}
+
+// dotDiagram shows a DOT diagram as the server drew it, the SVG it cleaned put
+// in as markup, or its source and why it cannot be drawn.
+function dotDiagram(b) {
+  if (!b.svg) {
+    return h('figure', {'class': 'diagram dot', 'data-drawn': 'false'}, h('pre', {}, h('code', {}, b.text)),
+        h('p', {class: 'finding error'}, h('span', {class: 'severity'}, 'error'), ' · the diagram cannot be drawn: ', b.error ?? ''));
+  }
+  const svg = new DOMParser().parseFromString(b.svg, 'image/svg+xml').documentElement;
+  return h('figure', {'class': 'diagram dot', 'data-drawn': 'true'}, document.importNode(svg, true));
 }
 
 function item(it, level) {
   const requirement = it.kind === 'requirement';
+  const cites = it.cites ?? {};
+  const notes = (it.notes ?? []).map((n, i) => (cites.notes?.[i] ? inline(cites.notes[i]) : n));
   const fields = [
     it.stakeholders?.length ? field('stakeholders', refs(it.stakeholders, titled)) : null,
-    it.measure ? field('measure', it.measure) : null,
+    it.measure ? field('measure', cites.measure ? inline(cites.measure) : it.measure) : null,
     it.verify ? field('verify', it.verify) : null,
     it.mirrors ? field('mirrors', titled(it.mirrors)) : null,
     it.links?.length ? field('links', links(it.links)) : null,
-    !requirement && it.notes?.length ? field('notes', list(it.notes)) : null,
+    !requirement && notes.length ? field('notes', list(notes)) : null,
   ].filter(Boolean);
 
   // One fold area: a requirement's rationale and notes, and the items that
-  // name the item, grouped by field.
+  // name or cite the item, each once, in reading order.
   const folded = requirement ? [
-    it.rationale ? field('rationale', it.rationale) : null,
-    it.notes?.length ? field('notes', list(it.notes)) : null,
+    it.rationale ? field('rationale', cites.rationale ? inline(cites.rationale) : it.rationale) : null,
+    notes.length ? field('notes', list(notes)) : null,
   ].filter(Boolean) : [];
-  const named = new Map();
+  const named = [];
   for (const n of it.namedBy ?? []) {
-    if (!named.has(n.field)) named.set(n.field, []);
-    named.get(n.field).push(n);
+    if (!named.some((m) => m.id === n.id)) named.push(n);
   }
   const summary = [
-    [requirement && it.rationale ? 'rationale' : '', requirement && it.notes?.length ? 'notes' : '']
+    [requirement && it.rationale ? 'rationale' : '', requirement && notes.length ? 'notes' : '']
         .filter(Boolean).join(', '),
-    ...[...named].map(([name, from]) => ['named in ' + name + ': ', refs(from)]),
+    named.length ? ['named by ', refs(named)] : '',
   ].filter((part) => part.length);
-  const fold = folded.length || named.size ? h('details', {
+  const fold = folded.length || named.length ? h('details', {
     'class': 'more', 'data-id': it.id, 'open': query().getAll('details').includes(it.id),
   },
   h('summary', {}, summary.flatMap((part, i) => (i ? [' · ', part] : [part]))),
-  h('dl', {class: 'fields'}, folded, [...named].map(([name, from]) =>
-    field('named in ' + name, h('ul', {}, from.map((n) => h('li', {}, ref(n), ' ', n.title))))))) : null;
+  h('dl', {class: 'fields'}, folded, named.length ?
+    field('named by', h('ul', {}, named.map((n) => h('li', {}, ref(n), ' ', n.title)))) : null)) : null;
 
   return h('article', {
     'class': 'item kind-' + it.kind + (it.context ? ' context' : ''),
@@ -337,11 +370,35 @@ function item(it, level) {
           h('span', {class: 'title'}, it.title), ' ', status(it),
           it.requirements?.total ? h('span', {class: 'counts'}, statuses(it.requirements)) : null),
       it.serves?.length ? h('p', {class: 'serves'}, 'serves ', refs(it.serves, titled)) : null,
-      it.blocks ? h('div', {class: 'text'}, blocks(it.blocks, level)) : it.text ? h('p', {class: 'text'}, it.text) : null,
+      it.blocks ? h('div', {class: 'text'}, blocks(it.blocks, level)) :
+        it.text ? h('p', {class: 'text'}, cites.text ? inline(cites.text) : it.text) : null,
       fields.length ? h('dl', {class: 'fields'}, fields) : null,
       findings(it.findings),
       fold,
       it.children?.length ? h('div', {class: 'children'}, it.children.map((c) => item(c, level + 1))) : null);
+}
+
+// byStatus returns items as the status filter shows them, when it chooses any
+// statuses: of the requirements, those at a chosen effective status, with
+// the requirements and topics above them as context; items of the other
+// kinds with what is shown below them.
+function byStatus(items, chosen) {
+  if (!chosen.length) return items;
+  const out = [];
+  for (const it of items) {
+    const children = byStatus(it.children ?? [], chosen);
+    const kept = {...it, children, context: false};
+    if (it.kind === 'requirement') {
+      const at = chosen.includes(it.effectiveStatus);
+      if (!at && !children.length) continue;
+      kept.context = !at;
+    } else if (it.kind === 'topic') {
+      if (!children.length) continue;
+      kept.context = true;
+    }
+    out.push(kept);
+  }
+  return out;
 }
 
 function heading(entry) {
@@ -364,8 +421,9 @@ function section(entry) {
   let content = null;
   if (open) {
     content = [
-      mission && entry.mission ? h('p', {class: 'statement'}, entry.mission) : null,
-      (full.items ?? []).map((it) => item(it, 3)),
+      mission && entry.mission ? h('p', {class: 'statement'},
+          entry.cites?.mission ? inline(entry.cites.mission) : entry.mission) : null,
+      byStatus(full.items ?? [], chosen).map((it) => item(it, 3)),
     ];
   }
   return h('section', {
@@ -404,7 +462,7 @@ function renderOutline() {
   const entries = state.set.files.map((f) => {
     const anchor = 'file:' + f.path;
     const full = f.kind === 'mission' ? f : state.chapters.get(f.path);
-    const sub = full && !f.broken ? outlined(full.items ?? [], f.path) : [];
+    const sub = full && !f.broken ? outlined(byStatus(full.items ?? [], query().getAll('status')), f.path) : [];
     return h('li', {'class': 'pure-menu-item', 'data-for': anchor},
         h('a', {
           'class': 'pure-menu-link' + (f.broken ? ' broken' : ''), 'href': '#' + anchor, 'data-scroll': anchor,
@@ -497,7 +555,7 @@ function renderStart(answer) {
 // Loading what the address asks for.
 
 async function loadStart() {
-  const r = await api('/api/sets');
+  const r = await api('sets');
   if (!r.ok) return;
   state.version = r.body.version;
   renderStart(r.body);
@@ -511,7 +569,9 @@ async function loadSet(also = []) {
   if (!r.ok) {
     state.set = null;
     state.version = '';
-    main.replaceChildren(h('p', {class: 'missing'}, r.body?.error ?? 'The set cannot be read.'));
+    // A static host answers what a copy lacks with its own page, not JSON.
+    const lacking = copy ? 'No set named ' + set + ' is served here.' : 'The set cannot be read.';
+    main.replaceChildren(h('p', {class: 'missing'}, r.body?.error ?? lacking));
     outline.replaceChildren();
     return null;
   }
@@ -520,13 +580,13 @@ async function loadSet(also = []) {
   if (target) {
     const t = await api(apiItem(set, target));
     if (t.ok) want.add(t.body.file);
-    else missing = t.body?.error ?? 'No item has the id ' + target + '.';
+    else missing = t.body?.error ?? 'No item of ' + set + ' has the id ' + target + '.';
   }
   const chapters = new Map();
   await Promise.all(r.body.files
       .filter((f) => f.kind === 'chapter' && !f.broken && want.has(f.path) && !emptyUnderFilter(f))
       .map(async (f) => {
-        const c = await api(apiChapter(set, f.path));
+        const c = await api(apiFile(set, f.path));
         if (c.ok) chapters.set(f.path, c.body);
       }));
   state.set = r.body;
@@ -569,7 +629,7 @@ async function load() {
 async function setChapter(sec, open, {chosen = true, keepPlace = false} = {}) {
   const path = sec.dataset.path;
   if (open) {
-    const r = await api(apiChapter(state.set.name, path));
+    const r = await api(apiFile(state.set.name, path));
     if (!r.ok) {
       sec.dataset.failed = '';
       return;
@@ -810,8 +870,189 @@ let searchTimer = 0;
 
 async function search(q) {
   const n = ++searches;
-  const r = await api(apiSet(state.set.name) + '/search?q=' + encodeURIComponent(q));
-  return n === searches && r.ok ? r.body : null;
+  let a = null;
+  if (copy) {
+    a = await searchCopy(q);
+  } else {
+    const r = await api(apiSet(state.set.name) + '/search?q=' + encodeURIComponent(q));
+    if (r.ok) a = r.body;
+  }
+  return n === searches ? a : null;
+}
+
+// A static copy has no server to search, so the page finds what the
+// server's search would: the item a single word names as an id, then the
+// items whose id and title hold every word, then those whose text does,
+// each in reading order and ignoring case. Words are split, trimmed and
+// lowercased by the rules of Go's strings package.
+
+const idLike = /^[OSNRT][0-9]+(\.[0-9]+)*$/i;
+const searchLimit = 50;
+const copySets = new Map();
+
+// The white space of Go's unicode.IsSpace.
+const goSpace = '[\\t\\n\\v\\f\\r \\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]';
+const goSpaces = new RegExp(goSpace + '+');
+const goEdges = new RegExp('^' + goSpace + '+|' + goSpace + '+$', 'g');
+
+// goLower lowercases as Go's strings.ToLower: each code point by its own
+// mapping, without the special cases of toLowerCase.
+function goLower(s) {
+  let out = '';
+  for (const c of s) out += c === '\u0130' ? 'i' : c.toLowerCase();
+  return out;
+}
+
+async function searchCopy(typed) {
+  const q = typed.replace(goEdges, '');
+  const a = {query: q, results: []};
+  const words = goLower(q).split(goSpaces).filter(Boolean);
+  if (!words.length || !state.set) return a;
+  const name = state.set.name;
+  const set = await copySet(name);
+  let exact = null;
+  let message = '';
+  let retired = false;
+  if (words.length === 1) ({exact, message, retired} = await resolveCopy(q));
+  if (exact) a.results.push({match: 'id', ...exact});
+  const holds = (s) => {
+    const lower = goLower(s);
+    return words.every((w) => lower.includes(w));
+  };
+  const groups = [[], []];
+  for (const it of set?.items ?? []) {
+    if (exact && exact.set === name && it.id === (exact.itemId ?? exact.id)) continue;
+    if (holds(it.id + ' ' + it.title)) groups[0].push(it);
+    else if (holds(it.id + ' ' + it.title + ' ' + it.text)) groups[1].push(it);
+  }
+  ['title', 'text'].forEach((match, i) => {
+    for (const it of groups[i]) {
+      if (a.results.length === searchLimit) {
+        a.more = (a.more ?? 0) + 1;
+        continue;
+      }
+      a.results.push({match, ...refCopy(name, set, it.id, it.id)});
+    }
+  });
+  if (!a.results.length) {
+    const why = retired || q.includes('/') || idLike.test(q) ? message : 'No item holds ' + words.join(', ') + '.';
+    if (why) a.message = why;
+  }
+  return a;
+}
+
+// resolveCopy says what an id names, as the reader typed it: an id of the
+// set, or name/id of another, where name is one the manifest gives a set
+// under depends or the name of a served set; matched exactly or else in
+// capitals.
+async function resolveCopy(typed) {
+  let name = state.set.name;
+  let local = typed;
+  const slash = typed.indexOf('/');
+  if (slash >= 0) {
+    const given = typed.slice(0, slash);
+    const depends = state.set.depends ?? {};
+    local = typed.slice(slash + 1);
+    name = Object.hasOwn(depends, given) ? depends[given] : given;
+    const sets = name === given ? await api('sets') : null;
+    if (sets && !sets.body?.sets?.some((s) => s.name === name)) {
+      return {exact: null, message: 'No set named ' + given + ' is served here.'};
+    }
+  }
+  const set = await copySet(name);
+  if (!set?.item(local) && !set?.retiredWith(local)) local = local.toUpperCase();
+  const r = refCopy(name, set, local, typed);
+  if (r.state === 'retired') {
+    const e = set.retiredWith(local);
+    return {exact: null, retired: true, message: typed + ' was retired at ' + e.file + ':' + e.line + '.'};
+  }
+  if (r.state === 'unknown') return {exact: null, message: 'No item has the id ' + typed + '.'};
+  return {exact: r, message: ''};
+}
+
+// refCopy returns what id names in a set of the copy, written as written,
+// as the server's refs say it: retired when its path or an ancestor's is,
+// else the item at its path when that has the id, else unknown.
+function refCopy(name, set, id, written) {
+  const r = {id: written, state: 'unknown'};
+  const e = set?.retiredWith(id);
+  const it = e ? null : set?.item(id);
+  if (e) {
+    Object.assign(r, {state: 'retired', set: name, title: e.title});
+    if (e.id !== id) r.retiredWith = e.id;
+  } else if (it) {
+    Object.assign(r, {state: 'item', set: name, title: it.title, file: it.file});
+  }
+  if (r.state !== 'unknown' && id !== written) r.itemId = id;
+  return r;
+}
+
+// idPath returns the path of an id, the id without its letter, as the
+// server keys items and retired entries.
+function idPath(id) {
+  return id.charCodeAt(0) < 128 ? id.slice(1) : '\0' + id;
+}
+
+// copySet returns a set of the copy as its search reads it: its items in
+// reading order, the first at each path not retired; the item an id names;
+// and the entry that retired an id's path or an ancestor's, whatever the
+// letter. It reads each chapter's file once, and again after a read failed.
+function copySet(name) {
+  if (!copySets.has(name)) {
+    const read = readCopySet(name);
+    copySets.set(name, read);
+    read.then((set) => {
+      if (!set?.complete) copySets.delete(name);
+    });
+  }
+  return copySets.get(name);
+}
+
+async function readCopySet(name) {
+  const r = name === state.set?.name ? {ok: true, body: state.set} : await api(apiSet(name));
+  if (!r.ok) return null;
+  const all = [];
+  const retired = new Map();
+  let complete = true;
+  const retire = (entries) => {
+    for (const e of entries ?? []) {
+      if (!retired.has(idPath(e.id))) retired.set(idPath(e.id), e);
+    }
+  };
+  // As the server reads a set, an item's children come before its own
+  // retired entries, and a file's items before its.
+  const walk = (items) => {
+    for (const it of items ?? []) {
+      all.push(it);
+      walk(it.children);
+      retire(it.retired);
+    }
+  };
+  for (const f of r.body.files) {
+    if (f.broken) continue;
+    const c = f.kind === 'mission' ? {ok: true, body: f} : await api(apiFile(name, f.path));
+    complete &&= c.ok;
+    walk(c.body?.items);
+    retire(c.body?.retired);
+  }
+  const byPath = new Map();
+  for (const it of all) {
+    if (!retired.has(idPath(it.id)) && !byPath.has(idPath(it.id))) byPath.set(idPath(it.id), it);
+  }
+  return {
+    complete,
+    items: all.filter((it) => byPath.get(idPath(it.id)) === it),
+    item(id) {
+      const it = byPath.get(idPath(id));
+      return it?.id === id ? it : null;
+    },
+    retiredWith(id) {
+      for (let p = idPath(id); ; p = p.slice(0, p.lastIndexOf('.'))) {
+        if (retired.has(p)) return retired.get(p);
+        if (!p.includes('.')) return null;
+      }
+    },
+  };
 }
 
 function listFound(list) {
@@ -1021,8 +1262,8 @@ async function refresh(keepPlace) {
 let events = null;
 
 function listen() {
-  if (events) return;
-  events = new EventSource('/api/events');
+  if (events || copy) return;
+  events = new EventSource(base + 'api/events');
   events.addEventListener('version', (e) => {
     if (e.data !== state.version) refresh(true);
   });

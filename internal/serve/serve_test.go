@@ -265,7 +265,7 @@ func TestEveryAnswerIsJSONWithItsVersion(t *testing.T) {
 	root := testfile.Write(t, coffee())
 	for _, path := range []string{
 		"/api/sets", "/api/sets/coffee", "/api/sets/coffee/files/a-brew.shall.yaml",
-		"/api/sets/coffee/items/R1", "/api/sets/coffee/resolve?id=R1",
+		"/api/sets/coffee/items/R1", "/api/sets/coffee/search?q=lamp",
 	} {
 		var a struct {
 			Version string `json:"version"`
@@ -297,48 +297,6 @@ func TestOneDocumentInOrder(t *testing.T) {
 	tank := file(t, root, "b-tank.shall.yaml")
 	if ids(tank.Items) != "R1 R2" || ids(tank.Items[0].Children) != "R1.1" {
 		t.Errorf("chapter = %s, children %s; want R1 R2, and R1.1 under R1", ids(tank.Items), ids(tank.Items[0].Children))
-	}
-}
-
-func TestFilteredByStatus(t *testing.T) {
-	t.Attr("verifies", "R26.15")
-	root := testfile.Write(t, with(coffee(), map[string]string{
-		"c-mixed.shall.yaml": "title: Mixed\nitems:\n  - id: R6\n    title: A\n    text: The machine SHALL hum.\n    serves: [N91.1]\n    status: approved\n    children:\n      - {id: R6.1, title: B, text: The machine SHALL hum low., status: approved}\n      - {id: R6.2, title: C, text: The machine SHALL hum softly., status: draft}\n" +
-			"  - id: T7\n    title: Noise\n    children:\n      - {id: R7.1, title: D, text: The machine SHALL purr., serves: [N91.1], status: approved}\n      - {id: R7.2, title: E, text: The machine SHALL whirr., serves: [N91.1], status: draft}\n" +
-			"  - {id: T8, title: Terms, text: A hum is a low sound.}\n",
-	}))
-	var shape func([]*itemJSON) string
-	shape = func(items []*itemJSON) string {
-		var out []string
-		for _, it := range items {
-			s := it.ID
-			if it.Context {
-				s += "(context)"
-			}
-			if len(it.Children) > 0 {
-				s += "[" + shape(it.Children) + "]"
-			}
-			out = append(out, s)
-		}
-		return strings.Join(out, " ")
-	}
-	for _, c := range []struct{ path, want string }{
-		{"b-tank.shall.yaml?status=approved", "R2"},
-		{"b-tank.shall.yaml?status=implemented", "R1[R1.1]"},
-		{"b-tank.shall.yaml?status=approved&status=implemented", "R1[R1.1] R2"},
-		{"b-tank.shall.yaml?status=draft", ""},
-		{"c-mixed.shall.yaml?status=approved", "R6(context)[R6.1] T7(context)[R7.1]"},
-		{"c-mixed.shall.yaml?status=draft", "R6[R6.2] T7(context)[R7.2]"},
-		{"c-mixed.shall.yaml", "R6[R6.1 R6.2] T7[R7.1 R7.2] T8"},
-	} {
-		a := fileAnswer{fileJSON: &fileJSON{}}
-		answer(t, root, "/api/sets/coffee/files/"+c.path, http.StatusOK, &a)
-		if got := shape(a.Items); got != c.want {
-			t.Errorf("%s = %q, want %q", c.path, got, c.want)
-		}
-	}
-	if a := setOf(t, root); a.Requirements != (statusCounts{Total: 10, Draft: 5, Approved: 3, Implemented: 2}) {
-		t.Errorf("set requirements = %+v, want 10: 5 draft, 3 approved, 2 implemented", a.Requirements)
 	}
 }
 
@@ -460,6 +418,9 @@ func TestIdsOfAnotherServedSetAreResolved(t *testing.T) {
 	if len(n1.Serves) != 1 || n1.Serves[0] != (refJSON{ID: "mission", State: "mission"}) {
 		t.Errorf("serves = %+v, want the word mission alone", n1.Serves)
 	}
+	if got := setOf(t, root).Depends; !maps.Equal(got, map[string]string{"company": "standard"}) {
+		t.Errorf("depends = %v, want company naming the served set standard", got)
+	}
 }
 
 func TestAnItemOnItsOwn(t *testing.T) {
@@ -492,20 +453,26 @@ func TestJumpToAnId(t *testing.T) {
 		"tea/mission.shall.yaml": mission,
 	}))
 	for _, c := range []struct {
-		id, state, set, itemID, message string
+		id, set, itemID, message string
 	}{
-		{"R1.1", "item", "coffee", "", ""},
-		{" r4 ", "item", "coffee", "R4", ""},
-		{"tea/N91.1", "item", "tea", "N91.1", ""},
-		{"R7", "unknown", "", "", "No item has the id R7."},
-		{"R1.2", "retired", "coffee", "", "R1.2 was retired at b-tank.shall.yaml:11."},
-		{"R3", "retired", "coffee", "", "R3 was retired at b-tank.shall.yaml:18."},
-		{"milk/N91.1", "unknown", "", "", "No set named milk is served here."},
+		{"R1.1", "coffee", "", ""},
+		{" r4 ", "coffee", "R4", ""},
+		{"tea/N91.1", "tea", "N91.1", ""},
+		{"R7", "", "", "No item has the id R7."},
+		{"R1.2", "", "", "R1.2 was retired at b-tank.shall.yaml:11."},
+		{"R3", "", "", "R3 was retired at b-tank.shall.yaml:18."},
+		{"milk/N91.1", "", "", "No set named milk is served here."},
 	} {
-		var a resolveAnswer
-		answer(t, root, "/api/sets/coffee/resolve?id="+strings.ReplaceAll(c.id, " ", "+"), http.StatusOK, &a)
-		if a.Ref.State != c.state || a.Ref.Set != c.set || a.Ref.ItemID != c.itemID || a.Message != c.message {
-			t.Errorf("resolve %q = %+v %q, want %s in %q as %q, %q", c.id, a.Ref, a.Message, c.state, c.set, c.itemID, c.message)
+		var a searchAnswer
+		answer(t, root, "/api/sets/coffee/search?q="+strings.ReplaceAll(c.id, " ", "+"), http.StatusOK, &a)
+		if c.set == "" {
+			if len(a.Results) != 0 || a.Message != c.message {
+				t.Errorf("search %q = %+v %q, want nothing found and %q", c.id, a.Results, a.Message, c.message)
+			}
+			continue
+		}
+		if len(a.Results) == 0 || a.Results[0].Match != "id" || a.Results[0].Set != c.set || a.Results[0].ItemID != c.itemID {
+			t.Errorf("search %q = %+v, want first the item it names in %q, as %q", c.id, a.Results, c.set, c.itemID)
 		}
 	}
 }
@@ -611,6 +578,34 @@ func TestPureCSSAndItsLicence(t *testing.T) {
 	code, licence := get(t, root, "/-/static/pure/LICENSE")
 	if code != http.StatusOK || !strings.Contains(licence, "Software License Agreement (BSD License)") {
 		t.Errorf("licence: status %d, %.80q; want 200 and the BSD licence", code, licence)
+	}
+}
+
+func TestCitationsComeAsRuns(t *testing.T) {
+	t.Attr("verifies", "R27")
+	root := testfile.Write(t, with(coffee(), map[string]string{
+		"c-notes.shall.yaml": "title: Notes\nitems:\n" +
+			"  - id: R6\n    title: A\n    text: The machine SHALL hum, as [T7] says.\n    serves: [N91.1]\n    status: draft\n    notes:\n      - plain\n      - See [R4].\n" +
+			"  - {id: T7, title: Terms, text: \"A *hum*, see [R6].\"}\n",
+	}))
+	r6 := item(t, root, "R6")
+	if r6.Cites == nil || len(r6.Cites.Text) != 3 || r6.Cites.Text[1].Type != "ref" || r6.Cites.Text[0].Text != "The machine SHALL hum, as " {
+		t.Fatalf("R6's cited text = %+v, want text, a ref to T7, then text", r6.Cites)
+	}
+	if got := r6.Cites.Notes; len(got) != 2 || got[0] != nil || len(got[1]) != 3 {
+		t.Errorf("R6's cited notes = %+v, want none for the first, text, a ref and text for the second", got)
+	}
+	t7 := item(t, root, "T7")
+	runs := t7.Blocks[0].Inline
+	if len(runs) < 4 || runs[len(runs)-2].Type != "ref" || t7.Cites != nil {
+		t.Errorf("T7's blocks = %+v, cites %+v; want a ref run among the blocks and no cites", runs, t7.Cites)
+	}
+	var named []string
+	for _, n := range item(t, root, "R6").NamedBy {
+		named = append(named, n.ID+"."+n.Field)
+	}
+	if got := strings.Join(named, " "); got != "T7.text" {
+		t.Errorf("R6 named by %s, want T7's text", got)
 	}
 }
 
@@ -773,7 +768,7 @@ func TestUnknownSetsInEveryAnswer(t *testing.T) {
 	root := testfile.Write(t, coffee())
 	for _, path := range []string{
 		"/api/sets/milk", "/api/sets/milk/files/a.shall.yaml", "/api/sets/milk/items/R1",
-		"/api/sets/milk/resolve?id=R1", "/api/sets/milk/search?q=lamp",
+		"/api/sets/milk/search?q=lamp",
 	} {
 		var e errorAnswer
 		answer(t, root, path, http.StatusNotFound, &e)

@@ -384,3 +384,35 @@ func TestATextThatIsNoTextIsLeftToTheSchema(t *testing.T) {
 	}
 	expect(t, got, finding.Warning, "R2", "the requirement serves nothing")
 }
+
+func TestCitationsAreWarnings(t *testing.T) {
+	t.Attr("verifies", "R2")
+	got := run(t, "name: x\nformat: 1\n", map[string]string{
+		"mission.shall.yaml": strings.Replace(mission, "mission: m", "mission: as [O99] says", 1),
+		"c.shall.yaml": `title: C
+items:
+  - id: R1
+    title: A
+    text: The tool SHALL do as [T2], [N1] and [nowhere/R1] say.
+    rationale: See [R5], and [T2.1].
+    serves: [N91.1]
+    status: draft
+  - {id: T2, title: Terms, text: "Read [R1] first."}
+retired:
+  - {id: R5, title: Gone}
+`,
+	})
+	expect(t, got, finding.Warning, "", "O99 is no item")
+	expect(t, got, finding.Warning, "R1", "N1 names the path of R1")
+	expect(t, got, finding.Warning, "R1", `nowhere/R1 names set "nowhere"`)
+	expect(t, got, finding.Warning, "R1", "R5 is retired")
+	expect(t, got, finding.Warning, "R1", "T2.1 is no item")
+	for _, f := range got {
+		if f.Severity == finding.Error {
+			t.Errorf("error = %+v, want every citation's finding a warning", f)
+		}
+		if strings.Contains(f.Message, "[T2]") || strings.Contains(f.Message, "T2 cannot be named") {
+			t.Errorf("finding = %+v, want a topic citable", f)
+		}
+	}
+}

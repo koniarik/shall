@@ -1,6 +1,7 @@
 // Package markdown reads a topic's Markdown into blocks of text, which the
 // page builds as text: CommonMark with GitHub's tables, HTML kept as text,
-// an image as a link to it, and a code block marked mermaid as a diagram.
+// an image as a link to it, and a code block marked mermaid or dot as a
+// diagram.
 package markdown
 
 import (
@@ -29,7 +30,8 @@ type Block struct {
 	Items   [][]Block `json:"items,omitempty"`
 	// Blocks are a quote's.
 	Blocks []Block `json:"blocks,omitempty"`
-	// Language is a code block's, as its fence names it.
+	// Language is a code block's, as its fence names it, and a diagram's:
+	// mermaid or dot.
 	Language string `json:"language,omitempty"`
 	// Text is a code block's, a diagram's or the HTML's, as written.
 	Text string `json:"text,omitempty"`
@@ -38,10 +40,15 @@ type Block struct {
 	Align []string     `json:"align,omitempty"`
 	Head  [][]Inline   `json:"head,omitempty"`
 	Rows  [][][]Inline `json:"rows,omitempty"`
+	// SVG is a diagram drawn by whoever reads the blocks, or Error why it
+	// cannot be.
+	SVG   string `json:"svg,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 // Inline is a run of text within a block: text, emphasis, strong, code, a
-// link or a break, as Type says.
+// link or a break, as Type says; or ref, an id cited, which a reader of
+// the blocks resolves.
 type Inline struct {
 	Type string `json:"type"`
 	// Text is the text of text and of code.
@@ -51,6 +58,8 @@ type Inline struct {
 	Title string `json:"title,omitempty"`
 	// Inline is what emphasis, strong and a link hold.
 	Inline []Inline `json:"inline,omitempty"`
+	// Ref is what a cited id names, as the reader resolves it.
+	Ref any `json:"ref,omitempty"`
 }
 
 var parser = goldmark.New(goldmark.WithExtensions(east.Table)).Parser()
@@ -89,8 +98,8 @@ func block(n ast.Node, source []byte) Block {
 		return Block{Type: "quote", Blocks: blocks(n, source)}
 	case *ast.FencedCodeBlock:
 		language := string(n.Language(source))
-		if language == "mermaid" {
-			return Block{Type: "diagram", Text: lines(n, source)}
+		if language == "mermaid" || language == "dot" {
+			return Block{Type: "diagram", Language: language, Text: lines(n, source)}
 		}
 		return Block{Type: "code", Language: language, Text: lines(n, source)}
 	case *ast.CodeBlock:
@@ -224,4 +233,41 @@ func plain(b []byte, raw bool) string {
 		return string(b)
 	}
 	return string(util.ResolveEntityNames(util.ResolveNumericReferences(util.UnescapePunctuations(b))))
+}
+
+// Prose returns the runs of text a Markdown text reads as, leaving out its
+// code, diagrams and HTML: the text in which it can cite.
+func Prose(src string) []string {
+	var out []string
+	var inline func([]Inline)
+	inline = func(list []Inline) {
+		for _, x := range list {
+			switch x.Type {
+			case "text":
+				out = append(out, x.Text)
+			case "emphasis", "strong", "link":
+				inline(x.Inline)
+			}
+		}
+	}
+	var walk func([]Block)
+	walk = func(list []Block) {
+		for _, b := range list {
+			inline(b.Inline)
+			for _, it := range b.Items {
+				walk(it)
+			}
+			walk(b.Blocks)
+			for _, c := range b.Head {
+				inline(c)
+			}
+			for _, row := range b.Rows {
+				for _, c := range row {
+					inline(c)
+				}
+			}
+		}
+	}
+	walk(Blocks(src))
+	return out
 }

@@ -201,8 +201,8 @@ items:
         status: implemented
   - id: R27
     title: Ids Are Links
-    text: The server SHALL show every id that a field names, and that names an item the server
-      serves, as a link to that item.
+    text: The server SHALL show every id that a field names or a text cites, and that names an
+      item the server serves, as a link to that item.
     serves: [N53.3]
     status: implemented
     children:
@@ -214,8 +214,8 @@ items:
         status: implemented
       - id: R27.2
         title: Backlinks In Short
-        text: The server SHALL show on each item the ids of the items that name it, grouped by the
-          field that names them.
+        text: The server SHALL show on each item the ids of the items that name or cite it, each
+          once, in reading order.
         status: implemented
         children:
           - id: R27.2.1
@@ -231,19 +231,19 @@ items:
         status: implemented
       - id: R27.4
         title: Unknown Ids As Text
-        text: If a field names an id that is neither an item nor retired in a set the server
-          serves, then the server SHALL show that id as plain text.
+        text: If a field names or a text cites an id that is neither an item nor retired in a set
+          the server serves, then the server SHALL show that id as plain text.
         rationale: A link must lead somewhere. The checker's finding on the item says what is
           wrong.
         status: implemented
       - id: R27.5
         title: Retired Ids Marked
-        text: If a field names a retired id, then the server SHALL show that id as plain text,
-          marked retired, with the title it was retired under.
+        text: If a field names or a text cites a retired id, then the server SHALL show that id as
+          plain text, marked retired, with the title it was retired under.
         status: implemented
       - id: R27.6
         title: Titles Beside Ids
-        text: The server SHALL show the title of each item that serves, stakeholder or mirrors
+        text: The server SHALL show the title of each item that serves, stakeholders or mirrors
           names beside its id.
         rationale: A reader then sees what an item serves without pointing at each id, which a
           phone cannot do. The titles are grey, so that the statement stays the text to read.
@@ -270,7 +270,7 @@ items:
         title: Found By Words
         text: When the reader enters words, the server SHALL list the items whose id, title or
           text holds every one of them, those matching by id first, then by title, then by text.
-        rationale: A reader often knows what a requirement says before its id, and O46 measures
+        rationale: A reader often knows what a requirement says before its id, and [O46] measures
           the time to find one by its text.
         status: implemented
   - id: R29
@@ -353,4 +353,41 @@ items:
         text: The repository SHALL describe each resource of the API, with an example of its
           answer.
         verify: inspection
+        status: implemented
+  - id: R60
+    title: A Static Copy
+    text: When asked to export, the tool SHALL write a copy of the pages it would serve for the
+      sets under the given directory, the current one by default, as files that any web host
+      serves as they are.
+    rationale: A reader then opens a set from a link, such as one in a README to a site on
+      GitHub Pages, without installing shall or running a server. Every answer the page reads
+      but a search's is fixed for one version of the files, so the copy holds each as a file.
+      Running the server's Go in the page, compiled to WebAssembly, was not taken; the page's
+      policy would have to let WebAssembly run, and a reader would load about 2 MB before the
+      first page.
+    serves: [N53.3]
+    status: implemented
+    children:
+      - id: R60.1
+        title: Searched In The Page
+        text: The copy's page SHALL find what the reader enters as the server's search would,
+          from the copy's files.
+        rationale: A static host runs nothing, and the copy already holds every item's id, title
+          and text.
+        status: implemented
+      - id: R60.2
+        title: Served Under A Path
+        text: Where its command line gives a path, the tool SHALL write a copy that works served
+          under that path, such as /shall/ for a GitHub project's site.
+        status: implemented
+      - id: R60.3
+        title: Nothing Overwritten
+        text: If the directory to write into holds anything, then the tool SHALL write nothing and
+          say so.
+        rationale: A mistyped directory then costs nothing, and the tool never has to delete.
+        status: implemented
+      - id: R60.4
+        title: Still While Open
+        text: The copy's page SHALL show the files as they stood when the copy was written.
+        rationale: A static host has no stream of changes to send; a new copy shows new files.
         status: implemented

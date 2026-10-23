@@ -119,14 +119,7 @@ type page struct {
 // fails it when the page has a script error.
 func openPage(t *testing.T, files map[string]string, path string) *page {
 	t.Helper()
-	exe := chrome.Find()
-	if exe == "" {
-		t.Skip("no Chrome to drive; set SHALL_CHROME to one")
-	}
-	browserOnce.Do(func() { browser, browserErr = chrome.Start(exe) })
-	if browserErr != nil {
-		t.Fatal(browserErr)
-	}
+	startBrowser(t)
 	root := testfile.Write(t, files)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -142,6 +135,20 @@ func openPage(t *testing.T, files map[string]string, path string) *page {
 	t.Cleanup(stop)
 	g.open(path)
 	return g
+}
+
+// startBrowser starts the headless Chrome the tests share, once, skipping
+// the test when there is no Chrome.
+func startBrowser(t *testing.T) {
+	t.Helper()
+	exe := chrome.Find()
+	if exe == "" {
+		t.Skip("no Chrome to drive; set SHALL_CHROME to one")
+	}
+	browserOnce.Do(func() { browser, browserErr = chrome.Start(exe) })
+	if browserErr != nil {
+		t.Fatal(browserErr)
+	}
 }
 
 // tab opens a tab of its own, closed and checked for script errors when the
@@ -449,7 +456,7 @@ func TestPageFoldArea(t *testing.T) {
 	t.Attr("verifies", "R26.13")
 	t.Attr("verifies", "R27.2.1")
 	g := openPage(t, pageSet(), "/demo/R1")
-	if got, want := g.str(`document.querySelector('#R1 > details.more > summary')?.textContent`), "rationale, notes · named in serves: R2"; got != want {
+	if got, want := g.str(`document.querySelector('#R1 > details.more > summary')?.textContent`), "rationale, notes · named by R2"; got != want {
 		t.Errorf("the fold's summary = %q, want %q", got, want)
 	}
 	if got := g.num(`document.querySelectorAll('#R1 > details').length`); got != 1 || g.is(`document.querySelector('#R1 > details.more').open`) {
@@ -753,6 +760,34 @@ func TestPageFilter(t *testing.T) {
 	g.expect(`!location.search.includes('status=') && location.pathname === '/demo/R45' && !!document.getElementById('R45')`, "going to an item the filter hides drops the filter")
 }
 
+func TestPageFilterShapes(t *testing.T) {
+	t.Attr("verifies", "R26.15")
+	g := openPage(t, with(coffee(), map[string]string{
+		"c-mixed.shall.yaml": "title: Mixed\nitems:\n  - id: R6\n    title: A\n    text: The machine SHALL hum.\n    serves: [N91.1]\n    status: approved\n    children:\n      - {id: R6.1, title: B, text: The machine SHALL hum low., status: approved}\n      - {id: R6.2, title: C, text: The machine SHALL hum softly., status: draft}\n" +
+			"  - id: T7\n    title: Noise\n    children:\n      - {id: R7.1, title: D, text: The machine SHALL purr., serves: [N91.1], status: approved}\n      - {id: R7.2, title: E, text: The machine SHALL whirr., serves: [N91.1], status: draft}\n" +
+			"  - {id: T8, title: Terms, text: A hum is a low sound.}\n",
+	}), "/coffee/")
+	for _, c := range []struct{ path, statuses, want string }{
+		{"b-tank.shall.yaml", `["approved"]`, "R2"},
+		{"b-tank.shall.yaml", `["implemented"]`, "R1[R1.1]"},
+		{"b-tank.shall.yaml", `["approved", "implemented"]`, "R1[R1.1] R2"},
+		{"b-tank.shall.yaml", `["draft"]`, ""},
+		{"c-mixed.shall.yaml", `["approved"]`, "R6(context)[R6.1] T7(context)[R7.1]"},
+		{"c-mixed.shall.yaml", `["draft"]`, "R6[R6.2] T7(context)[R7.2]"},
+		{"c-mixed.shall.yaml", `[]`, "R6[R6.1 R6.2] T7[R7.1 R7.2] T8"},
+	} {
+		var got string
+		g.eval(fmt.Sprintf(`(async () => {
+  const shape = (items) => items.map((it) => it.id + (it.context ? '(context)' : '') + (it.children?.length ? '[' + shape(it.children) + ']' : '')).join(' ');
+  const r = await api(apiFile('coffee', %q));
+  return shape(byStatus(r.body.items ?? [], %s));
+})()`, c.path, c.statuses), &got)
+		if got != c.want {
+			t.Errorf("%s under %s shows %q, want %q", c.path, c.statuses, got, c.want)
+		}
+	}
+}
+
 func TestPageUsesOnlyTheAPI(t *testing.T) {
 	t.Attr("verifies", "R36.1")
 	g := openPage(t, pageSet(), "/demo/")
@@ -877,5 +912,60 @@ func TestPageDrawsATopic(t *testing.T) {
 	}
 	if fill := g.str(`getComputedStyle(document.querySelector('figure.diagram[data-drawn="true"] svg rect')).fill`); fill == "rgb(0, 0, 0)" {
 		t.Errorf("a state's fill = %s, want the drawing's own styles applied", fill)
+	}
+}
+
+func TestPageCitations(t *testing.T) {
+	t.Attr("verifies", "R27")
+	t.Attr("verifies", "R27.2")
+	t.Attr("verifies", "R27.4")
+	t.Attr("verifies", "R27.5")
+	set := map[string]string{
+		"shall.yaml":         "name: demo\nformat: 1\n",
+		"mission.shall.yaml": "title: Mission\nmission: Coffee, as [O1] says.\nitems:\n  - {id: O1, title: Dry, text: t, measure: m}\n  - id: S2\n    title: S\n    text: t\n    children:\n      - {id: N2.1, title: N, text: t, serves: [O1], status: hypothesis}\n",
+		"a.shall.yaml": "title: Alpha\nitems:\n" +
+			"  - id: R3\n    title: Lamp\n    text: The tool SHALL work as [T4] explains.\n    serves: [N2.1]\n    rationale: Because [R9] and [R5].\n    status: draft\n" +
+			"  - id: T4\n    title: Terms\n    text: Read [R3] first.\n" +
+			"  - {id: R6, title: More, text: The tool SHALL do more., serves: [R3], status: draft}\n" +
+			"retired:\n  - {id: R5, title: Gone}\n",
+	}
+	g := openPage(t, set, "/demo/R3")
+	for _, c := range []struct{ expr, want string }{
+		{`document.querySelector('.statement a[data-item="O1"]')?.textContent`, "O1"},
+		{`document.querySelector('#R3 > .text a[data-item="T4"]')?.textContent`, "T4"},
+		{`document.querySelector('#T4 > .text a[data-item="R3"]')?.textContent`, "R3"},
+		{`document.querySelector('#R3 details.more .unknown')?.textContent`, "R9"},
+		{`document.querySelector('#R3 details.more .retired')?.textContent`, "R5 retired: Gone"},
+		{`document.querySelector('#R3 > details.more > summary')?.textContent`, "rationale · named by T4, R6"},
+	} {
+		if got := g.str(c.expr); got != c.want {
+			t.Errorf("%s = %q, want %q", c.expr, got, c.want)
+		}
+	}
+}
+
+func TestPageDrawsDOT(t *testing.T) {
+	t.Attr("verifies", "R59")
+	t.Attr("verifies", "R26.16")
+	text := "    text: |\n" +
+		"      ```dot\n      digraph {\n        rankdir=LR\n        node [shape=box]\n        build -> test -> root\n" +
+		"        { rank=same; test; a [label=\"jig A\"]; b [label=\"jig B\"] }\n        test -> a [dir=none]\n        test -> b [dir=none]\n      }\n      ```\n\n" +
+		"      ```dot\n      digraph { a -> }\n      ```\n"
+	set := map[string]string{
+		"shall.yaml":         "name: demo\nformat: 1\n",
+		"mission.shall.yaml": "title: Mission\nmission: m\n",
+		"a.shall.yaml":       "title: Alpha\nitems:\n  - id: T1\n    title: Nodes\n" + text,
+	}
+	g := openPage(t, set, "/demo/T1")
+	drawn := `document.querySelector('figure.dot[data-drawn="true"] svg')`
+	g.expect(`!!`+drawn, "the DOT diagram drawn")
+	if got := g.str(drawn + `.textContent`); !strings.Contains(got, "jig A") || !strings.Contains(got, "root") {
+		t.Errorf("the drawing's text = %q, want its nodes", got)
+	}
+	if got, want := g.str(`getComputedStyle(`+drawn+`.querySelector('text')).fill`), g.str(`getComputedStyle(document.querySelector('figure.dot')).color`); got != want {
+		t.Errorf("the drawing's text fill = %s, want the page's colour %s", got, want)
+	}
+	if got := g.str(`document.querySelector('figure.dot[data-drawn="false"] .finding')?.textContent`); !strings.Contains(got, "the diagram cannot be drawn: syntax error in line") {
+		t.Errorf("a broken diagram shows %q, want Graphviz's syntax error", got)
 	}
 }

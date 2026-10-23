@@ -267,9 +267,34 @@ func TestWrongUseIsRefused(t *testing.T) {
 		{"check", dir, dir},
 		{"serve", "-no-such-flag"},
 		{"serve", dir, dir},
+		{"export", "-no-such-flag"},
+		{"export", "-out", filepath.Join(dir, "site"), dir, dir},
 	} {
 		if code, out := shall(t, args...); code != 2 || !strings.Contains(out, "usage") && !strings.Contains(out, "flag provided but not defined") {
 			t.Errorf("shall %v = exit %d %q, want 2 with the usage", args, code, out)
+		}
+	}
+}
+
+func TestExportWritesACopy(t *testing.T) {
+	t.Attr("verifies", "R60")
+	t.Attr("verifies", "R60.2")
+	t.Attr("verifies", "R60.3")
+	dir := testfile.Write(t, map[string]string{"shall.yaml": manifest, "mission.shall.yaml": mission})
+	out := filepath.Join(t.TempDir(), "site")
+	if code, msg := shall(t, "export", "-out", out, "-base", "/pub/", dir); code != 0 || msg != "" {
+		t.Fatalf("exit %d %q, want 0 and nothing said", code, msg)
+	}
+	page, err := os.ReadFile(filepath.Join(out, "x", "N9.1.html"))
+	if err != nil || !bytes.Contains(page, []byte(`<meta name="shall-base" content="/pub/">`)) {
+		t.Errorf("the copy holds no page for N9.1 of set x, served under /pub/: %v\n%s", err, page)
+	}
+	if code, msg := shall(t, "export", "-out", out, dir); code != 2 || !strings.Contains(msg, "is not empty") {
+		t.Errorf("exporting again = exit %d %q, want 2 saying the directory is not empty", code, msg)
+	}
+	for _, args := range [][]string{{"export", dir}, {"export", "-out", filepath.Join(t.TempDir(), "s"), "-base", "x", dir}} {
+		if code, msg := shall(t, args...); code != 2 || !strings.Contains(msg, "shall:") {
+			t.Errorf("shall %v = exit %d %q, want 2 with the reason", args, code, msg)
 		}
 	}
 }

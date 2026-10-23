@@ -267,6 +267,11 @@ h1 { font-size: 1.6rem; }
 .align-right { text-align: right; }
 figure.diagram { margin: 0.5rem 0; overflow-x: auto; }
 figure.diagram svg { max-width: 100%; height: auto; }
+/* Graphviz draws black on white; those follow the colour scheme, other
+   colours stay as the diagram gives them. */
+figure.dot svg .graph > polygon[fill="white"]:first-of-type { fill: transparent; }
+figure.dot svg [stroke="black"] { stroke: currentColor; }
+figure.dot svg [fill="black"], figure.dot svg text:not([fill]) { fill: currentColor; }
 
 .item {
   margin: 0.8rem 0;
