@@ -22,24 +22,25 @@ directory, or git cannot compare the words of a text.
 What counts as a change is in
 [diff.shall.yaml](requirements/diff.shall.yaml): sets are matched by the path
 of their manifest and items by id; an item moved within its chapter, or a
-value changed only in its whitespace, is no change.
+value changed only in its whitespace, is no change, unless the whitespace
+changes how a topic's Markdown reads.
 
 The examples below compare the example set at the end of
-[format.md](format.md) with a working tree in which R1.1 is reworded and
-back to draft, and a chapter adds R3.
+[format.md](format.md) with a working tree in which R3.1.1 is reworded and
+back to draft, and a chapter adds R5.
 
 ## Text
 
 ```text
 shall.yaml: set coffee
   requirements/01-tank.shall.yaml
-    R1 Refill Lamp: changed
+    R3.1 Refill Lamp: changed
       effective status: [-implemented-]{+draft+}
-    R1.1 Lamp Seen From The Door: changed
+    R3.1.1 Lamp Seen From The Door: changed
       text: … refill lamp to anyone [-standing at-]{+entering+} the [-kitchen door.-]{+kitchen.+}
       status: [-implemented-]{+draft+}
   requirements/02-brew.shall.yaml: chapter added
-    R3 No Brew On An Empty Tank: added
+    R5 No Brew On An Empty Tank: added
 2 items changed, 1 added, 0 removed, 0 retired, 0 moved
 ```
 
@@ -47,7 +48,9 @@ Each set comes with its set-wide fields, then its files in path order, each
 with its items in reading order and the items gone last, then the checker's
 findings new at the head and gone from it. A changed value shows its removed
 words `[-like this-]` and its added ones `{+like this+}`, with a few unchanged
-words around each change; a list shows its entries so.
+words around each change; a list shows its entries so. Where a topic's text
+changes only in its whitespace, the whitespace that changed shows instead, a
+line break as `↵` and any other space as `·`.
 
 ## JSON
 
@@ -72,7 +75,7 @@ A set carries:
 | `name` | The name its manifest gives it |
 | `change` | `added`, `removed` or `changed` |
 | `fields` | Its set-wide fields that differ: the manifest's `name`, `path` and `depends`, the mission file's `mission` and `ranking` |
-| `files` | Its chapters added, removed or retitled, and its mission file added or removed |
+| `files` | Its chapters added, removed or retitled, the mission file among them |
 | `items` | Its items that differ |
 | `findings` | The checker's findings `new` at the head and those `gone`, each as `shall check` reports it, matched while ignoring their lines |
 
@@ -113,7 +116,7 @@ An item carries:
       ],
       "items": [
         {
-          "id": "R1",
+          "id": "R3.1",
           "title": "Refill Lamp",
           "file": "requirements/01-tank.shall.yaml",
           "change": "changed",
@@ -123,7 +126,7 @@ An item carries:
           }
         },
         {
-          "id": "R1.1",
+          "id": "R3.1.1",
           "title": "Lamp Seen From The Door",
           "file": "requirements/01-tank.shall.yaml",
           "change": "changed",
@@ -141,7 +144,7 @@ An item carries:
           ]
         },
         {
-          "id": "R3",
+          "id": "R5",
           "title": "No Brew On An Empty Tank",
           "file": "requirements/02-brew.shall.yaml",
           "change": "added"

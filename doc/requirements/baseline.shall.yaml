@@ -1,6 +1,6 @@
 ---
 title: Baseline
-requirements:
+items:
   - id: R7
     title: Secure By Default
     text: When input arrives over the network, the product SHALL validate it before anything acts
@@ -104,7 +104,7 @@ requirements:
     title: Known Supply Chain
     text: The product SHALL pin every dependency to a version.
     verify: inspection
-    status: approved
+    status: implemented
     links:
       - url: https://slsa.dev/
         title: SLSA supply-chain levels
@@ -112,4 +112,4 @@ requirements:
       - id: R18.1
         title: Known Licences
         text: The product SHALL record the licence of every dependency.
-        status: approved
+        status: implemented

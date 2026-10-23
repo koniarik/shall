@@ -286,8 +286,8 @@ func (p *Page) listen() {
 	}
 }
 
-// event records what an event says about the page: script errors and
-// requests. It runs with p.mu held.
+// event records what an event says about the page: script errors, errors
+// the browser logs, such as a resource refused, and requests. It runs with p.mu held.
 func (p *Page) event(m message) {
 	switch m.Method {
 	case "Runtime.exceptionThrown":
@@ -316,6 +316,18 @@ func (p *Page) event(m message) {
 				parts = append(parts, fmt.Sprint(a.Value), a.Description)
 			}
 			p.problems = append(p.problems, "console: "+strings.Join(parts, " "))
+		}
+	case "Log.entryAdded":
+		var e struct {
+			Entry struct {
+				Source string `json:"source"`
+				Level  string `json:"level"`
+				Text   string `json:"text"`
+			} `json:"entry"`
+		}
+		json.Unmarshal(m.Params, &e)
+		if e.Entry.Level == "error" {
+			p.problems = append(p.problems, "log: "+e.Entry.Source+": "+e.Entry.Text)
 		}
 	case "Network.requestWillBeSent":
 		var e struct {

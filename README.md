@@ -108,30 +108,35 @@ path: requirements
 
 ```yaml
 # requirements/mission.shall.yaml
+title: Why The Machine Exists
 mission: Coffee in the office without anyone looking after the machine.
-stakeholders:
+items:
   - id: S1
     title: Office User
     text: Wants coffee without having to look after the machine.
-needs:
-  - id: N1
-    title: Know Before Brewing
-    stakeholder: S1
-    text: Know before I brew that the tank needs water.
-    serves: [mission]
-    status: hypothesis
+    children:
+      - id: N1.1
+        title: Know Before Brewing
+        text: Know before I brew that the tank needs water.
+        serves: [mission]
+        status: hypothesis
 ```
 
 ```yaml
 # requirements/tank.shall.yaml
 title: Water Tank
-requirements:
-  - id: R1
+items:
+  - id: R2
     title: Refill Lamp
     text: When the tank becomes empty, the machine SHALL light the refill lamp.
-    serves: [N1]
+    serves: [N1.1]
     status: approved
 ```
 
 [doc/format.md](doc/format.md) explains every kind of item and field, with a
 good and a bad example of each.
+
+## Licence
+
+shall is under the MIT licence in [LICENSE](LICENSE). The libraries it is
+built from, and their licences, are listed in [doc/licences.md](doc/licences.md).

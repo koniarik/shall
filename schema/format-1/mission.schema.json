@@ -2,14 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "shall mission file, format 1",
   "type": "object",
-  "required": ["mission"],
+  "required": ["title", "mission"],
   "additionalProperties": false,
   "properties": {
+    "title": { "$ref": "items.schema.json#/$defs/text" },
     "mission": { "$ref": "items.schema.json#/$defs/text" },
     "ranking": { "type": "array", "items": { "$ref": "items.schema.json#/$defs/objectiveId" } },
-    "objectives": { "type": "array", "items": { "$ref": "items.schema.json#/$defs/objective" } },
-    "stakeholders": { "type": "array", "items": { "$ref": "items.schema.json#/$defs/stakeholder" } },
-    "needs": { "type": "array", "items": { "$ref": "items.schema.json#/$defs/need" } },
+    "items": { "$ref": "items.schema.json#/$defs/items" },
     "retired": { "$ref": "items.schema.json#/$defs/retired" }
   }
 }

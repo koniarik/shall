@@ -43,11 +43,9 @@ func WriteText(w io.Writer, r *Result) error {
 			case f == nil:
 				t.line("  %s", p)
 			case f.Change == "retitled":
-				t.change(f.Title.Old, f.Title.New, "  %s: chapter retitled ", p)
-			case f.Mission:
-				t.line("  %s: mission file %s", p, f.Change)
+				t.change(f.Title.Old, f.Title.New, "  %s: %s retitled ", p, f.noun())
 			default:
-				t.line("  %s: chapter %s", p, f.Change)
+				t.line("  %s: %s %s", p, f.noun(), f.Change)
 			}
 			for _, it := range items[p] {
 				note := it.Change
@@ -56,6 +54,10 @@ func WriteText(w io.Writer, r *Result) error {
 				}
 				t.line("    %s %s: %s", it.ID, it.Title, note)
 				for _, f := range it.Fields {
+					if it.ID != "" && it.ID[0] == 'T' && f.Field == "text" {
+						t.markdown(f.Old, f.New, "      %s: ", f.Field)
+						continue
+					}
 					t.change(f.Old, f.New, "      %s: ", f.Field)
 				}
 				if e := it.EffectiveStatus; e != nil {
@@ -99,7 +101,14 @@ func (t *draft) line(format string, args ...any) {
 func (t *draft) change(old, cur any, format string, args ...any) {
 	t.lines = append(t.lines, fmt.Sprintf(format, args...))
 	t.ending = append(t.ending, len(t.changes))
-	t.changes = append(t.changes, change{old, cur})
+	t.changes = append(t.changes, change{old: old, cur: cur})
+}
+
+// markdown adds a line that ends with a change of Markdown, whose
+// whitespace shows where its words alone do not change.
+func (t *draft) markdown(old, cur any, format string, args ...any) {
+	t.change(old, cur, format, args...)
+	t.changes[len(t.changes)-1].spaced = true
 }
 
 func (t *draft) write(w io.Writer) error {
@@ -114,6 +123,14 @@ func (t *draft) write(w io.Writer) error {
 		fmt.Fprintln(w, l)
 	}
 	return nil
+}
+
+// noun names what a file is: the mission file or a chapter.
+func (f *FileChange) noun() string {
+	if f.Mission {
+		return "mission file"
+	}
+	return "chapter"
 }
 
 func unless(change, usual string) string {

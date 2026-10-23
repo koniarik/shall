@@ -2,11 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "shall chapter file, format 1",
   "type": "object",
-  "required": ["title", "requirements"],
+  "required": ["title"],
   "additionalProperties": false,
   "properties": {
     "title": { "$ref": "items.schema.json#/$defs/text" },
-    "requirements": { "type": "array", "items": { "$ref": "items.schema.json#/$defs/requirement" } },
+    "items": { "$ref": "items.schema.json#/$defs/items" },
     "retired": { "$ref": "items.schema.json#/$defs/retired" }
   }
 }

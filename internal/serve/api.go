@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"shall/internal/finding"
+	"shall/internal/markdown"
 	"shall/internal/model"
 	"shall/internal/tree"
 )
@@ -104,14 +105,11 @@ type fileJSON struct {
 	Title  string `json:"title,omitempty"`
 	Counts counts `json:"counts"`
 	// Findings are those that concern the file and none of its items.
-	Findings     []finding.Finding `json:"findings"`
-	Mission      string            `json:"mission,omitempty"`
-	Ranking      []refJSON         `json:"ranking,omitempty"`
-	Objectives   []*itemJSON       `json:"objectives,omitempty"`
-	Stakeholders []*itemJSON       `json:"stakeholders,omitempty"`
-	Needs        []*itemJSON       `json:"needs,omitempty"`
-	Requirements []*itemJSON       `json:"requirements,omitempty"`
-	Retired      []retiredJSON     `json:"retired,omitempty"`
+	Findings []finding.Finding `json:"findings"`
+	Mission  string            `json:"mission,omitempty"`
+	Ranking  []refJSON         `json:"ranking,omitempty"`
+	Items    []*itemJSON       `json:"items,omitempty"`
+	Retired  []retiredJSON     `json:"retired,omitempty"`
 }
 
 // counts are the items a file holds, the findings shown in it, and its
@@ -164,15 +162,15 @@ type itemJSON struct {
 	Text  string `json:"text"`
 	File  string `json:"file"`
 	Line  int    `json:"line"`
-	// Context marks a requirement shown only because a child of it matches
-	// the statuses asked for.
+	// Context marks a requirement or topic shown only because an item below
+	// it matches the statuses asked for.
 	Context bool `json:"context,omitempty"`
 	// Status is the status as written; EffectiveStatus is a requirement's
 	// lowest status counting its children.
 	Status          string            `json:"status,omitempty"`
 	EffectiveStatus string            `json:"effectiveStatus,omitempty"`
 	Measure         string            `json:"measure,omitempty"`
-	Stakeholder     *refJSON          `json:"stakeholder,omitempty"`
+	Stakeholders    []refJSON         `json:"stakeholders,omitempty"`
 	Serves          []refJSON         `json:"serves,omitempty"`
 	Rationale       string            `json:"rationale,omitempty"`
 	Verify          string            `json:"verify,omitempty"`
@@ -183,6 +181,11 @@ type itemJSON struct {
 	Findings        []finding.Finding `json:"findings,omitempty"`
 	Retired         []retiredJSON     `json:"retired,omitempty"`
 	Children        []*itemJSON       `json:"children,omitempty"`
+	// Requirements counts a topic's requirements, all below it, by effective
+	// status.
+	Requirements *statusCounts `json:"requirements,omitempty"`
+	// Blocks are a topic's text read as Markdown.
+	Blocks []markdown.Block `json:"blocks,omitempty"`
 }
 
 // refJSON is what an id written in a field names.
@@ -221,7 +224,7 @@ type retiredJSON struct {
 	Line  int    `json:"line"`
 }
 
-var kinds = map[byte]string{'O': "objective", 'S': "stakeholder", 'N': "need", 'R': "requirement"}
+var kinds = map[byte]string{'O': "objective", 'S': "stakeholder", 'N': "need", 'R': "requirement", 'T': "topic"}
 
 func orEmpty[T any](s []T) []T {
 	if s == nil {
@@ -285,7 +288,8 @@ func (b builder) set() setAnswer {
 
 // file returns a file's answer, with its items when withItems is true. When
 // statuses names any, only the requirements at one of those effective
-// statuses come, with their parents as context.
+// statuses come of the requirements, with the requirements and topics above
+// them as context.
 func (b builder) file(f *model.File, withItems bool, statuses map[string]bool) *fileJSON {
 	v := &fileJSON{
 		Path: f.Path, Kind: "chapter", Broken: f.Tree == nil,
@@ -312,27 +316,19 @@ func (b builder) file(f *model.File, withItems bool, statuses map[string]bool) *
 	}
 	for _, it := range f.Items {
 		j := b.item(it)
-		if it.Kind == 'R' && len(statuses) > 0 {
+		if len(statuses) > 0 {
 			if j = filter(j, statuses); j == nil {
 				continue
 			}
 		}
-		switch it.Kind {
-		case 'O':
-			v.Objectives = append(v.Objectives, j)
-		case 'S':
-			v.Stakeholders = append(v.Stakeholders, j)
-		case 'N':
-			v.Needs = append(v.Needs, j)
-		case 'R':
-			v.Requirements = append(v.Requirements, j)
-		}
+		v.Items = append(v.Items, j)
 	}
 	return v
 }
 
-// filter returns a requirement's answer cut down to the requirements at one
-// of statuses and their parents, or nil when none of them is.
+// filter returns an item's answer cut down to the requirements at one of
+// statuses, with the requirements and topics above them, or nil when none
+// is below it. Items of the other kinds stay, their children filtered.
 func filter(it *itemJSON, statuses map[string]bool) *itemJSON {
 	var kept []*itemJSON
 	for _, c := range it.Children {
@@ -340,11 +336,20 @@ func filter(it *itemJSON, statuses map[string]bool) *itemJSON {
 			kept = append(kept, c)
 		}
 	}
-	matches := statuses[it.EffectiveStatus]
-	if !matches && kept == nil {
-		return nil
+	switch it.Kind {
+	case "requirement":
+		matches := statuses[it.EffectiveStatus]
+		if !matches && kept == nil {
+			return nil
+		}
+		it.Context = !matches
+	case "topic":
+		if kept == nil {
+			return nil
+		}
+		it.Context = true
 	}
-	it.Children, it.Context = kept, !matches
+	it.Children = kept
 	return it
 }
 
@@ -378,14 +383,32 @@ func (b builder) item(it *model.Item) *itemJSON {
 		v.Measure, _ = n.Get("measure").Str()
 	case 'N':
 		v.Status = it.Status()
-		if s, ok := n.Get("stakeholder").Str(); ok {
-			r := b.ref(s)
-			v.Stakeholder = &r
+		if list := n.Get("stakeholders"); list != nil && list.Kind == tree.Seq {
+			for _, x := range list.Items {
+				if id, ok := x.Str(); ok {
+					v.Stakeholders = append(v.Stakeholders, b.ref(id))
+				}
+			}
 		}
 	case 'R':
 		v.Status, v.EffectiveStatus = it.Status(), it.EffectiveStatus()
 		v.Rationale, _ = n.Get("rationale").Str()
 		v.Verify, _ = n.Get("verify").Str()
+	case 'T':
+		if v.Text != "" {
+			v.Blocks = markdown.Blocks(v.Text)
+		}
+		v.Requirements = &statusCounts{}
+		var below func(*model.Item)
+		below = func(x *model.Item) {
+			for _, c := range x.Children {
+				if c.Kind == 'R' && b.sv.Set.Item(c.ID) == c {
+					v.Requirements.add(c.EffectiveStatus())
+				}
+				below(c)
+			}
+		}
+		below(it)
 	}
 	if list := n.Get("serves"); (it.Kind == 'N' || it.Kind == 'R') && list != nil && list.Kind == tree.Seq {
 		v.Serves = []refJSON{}
@@ -429,7 +452,7 @@ func (b builder) item(it *model.Item) *itemJSON {
 }
 
 // idLike matches what a reader types as an id rather than as a word.
-var idLike = regexp.MustCompile(`^[OSNRosnr][0-9]+(\.[0-9]+)*$`)
+var idLike = regexp.MustCompile(`^[OSNRTosnrt][0-9]+(\.[0-9]+)*$`)
 
 // searchLimit is the most results a search lists.
 const searchLimit = 50

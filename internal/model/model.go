@@ -28,15 +28,15 @@ type File struct {
 	Retired []*Retired
 }
 
-// Title returns a chapter's title, or "" when it has none.
+// Title returns the chapter's title, or "" when it has none.
 func (f *File) Title() string {
 	s, _ := f.Tree.Get("title").Str()
 	return s
 }
 
-// Item is one objective, stakeholder, need or requirement.
+// Item is one objective, stakeholder, need, requirement or topic.
 type Item struct {
-	// Kind is the item's prefix: 'O', 'S', 'N' or 'R'.
+	// Kind is the letter its id starts with: 'O', 'S', 'N', 'R' or 'T'.
 	Kind     byte
 	ID       string
 	File     *File
@@ -45,6 +45,18 @@ type Item struct {
 	Children []*Item
 	// Retired are the entries of the item's own retired list.
 	Retired []*Retired
+}
+
+// Path returns the path of the item's id, which names the item whatever its
+// letter.
+func (it *Item) Path() string { return Path(it.ID) }
+
+// Path returns the path of an id: the id without its letter.
+func Path(id string) string {
+	if id == "" {
+		return ""
+	}
+	return id[1:]
 }
 
 // Title returns the item's title.
@@ -74,9 +86,10 @@ func (it *Item) Waived() bool {
 var statuses = []string{"draft", "approved", "implemented", "verified"}
 
 // EffectiveStatus returns the lowest of a requirement's own status and the
-// effective statuses of its children that are not waived. A waived
-// requirement, and every child of one, is effectively waived. A status
-// outside the order is returned as written.
+// effective statuses of the requirements nearest below it, through topics,
+// that are not waived. A waived requirement, and every requirement below
+// one, is effectively waived. A status outside the order is returned as
+// written.
 func (it *Item) EffectiveStatus() string {
 	if it.Waived() {
 		return "waived"
@@ -85,7 +98,7 @@ func (it *Item) EffectiveStatus() string {
 	if low < 0 {
 		return it.Status()
 	}
-	for _, c := range it.Children {
+	for _, c := range it.Below(it.Kind) {
 		if c.Waived() {
 			continue
 		}
@@ -96,7 +109,63 @@ func (it *Item) EffectiveStatus() string {
 	return statuses[low]
 }
 
-// Refs returns the ids the item names, field by field in the order the
+// Below returns the items of a kind nearest below it: its children of that
+// kind, and those below the topics among its children, through topics.
+func (it *Item) Below(kind byte) []*Item {
+	var out []*Item
+	for _, c := range it.Children {
+		switch c.Kind {
+		case kind:
+			out = append(out, c)
+		case 'T':
+			out = append(out, c.Below(kind)...)
+		}
+	}
+	return out
+}
+
+// Above returns the nearest item above it of its own kind, through topics,
+// or nil. It is the item a child inherits from.
+func (it *Item) Above() *Item {
+	for p := it.Parent; p != nil; p = p.Parent {
+		switch {
+		case p.Kind == it.Kind:
+			return p
+		case p.Kind != 'T':
+			return nil
+		}
+	}
+	return nil
+}
+
+// Inherited returns a field as the item sets it, or else as the items above
+// it of its own kind set it, nearest first; nil when none does. The caller
+// names only fields the item's kind inherits.
+func (it *Item) Inherited(field string) *tree.Node {
+	for x := it; x != nil; x = x.Above() {
+		if n := x.Node.Get(field); n != nil {
+			return n
+		}
+	}
+	return nil
+}
+
+// Class returns the stakeholder class a need sits under: the nearest one
+// above it, through needs and topics, or nil.
+func (it *Item) Class() *Item {
+	for p := it.Parent; p != nil; p = p.Parent {
+		switch p.Kind {
+		case 'S':
+			return p
+		case 'N', 'T':
+		default:
+			return nil
+		}
+	}
+	return nil
+}
+
+// Refs returns the ids the item writes, field by field in the order the
 // format defines them. The word mission in a need's serves names no item.
 func (it *Item) Refs() []Ref {
 	var out []Ref
@@ -105,20 +174,25 @@ func (it *Item) Refs() []Ref {
 			out = append(out, Ref{From: it, File: it.File, Field: field, ID: id, Node: n})
 		}
 	}
-	if it.Kind == 'N' {
-		add("stakeholder", it.Node.Get("stakeholder"))
-	}
-	if it.Kind == 'N' || it.Kind == 'R' {
-		if list := it.Node.Get("serves"); list != nil && list.Kind == tree.Seq {
-			for _, n := range list.Items {
-				if s, _ := n.Str(); it.Kind == 'N' && s == "mission" {
+	list := func(field string) {
+		if l := it.Node.Get(field); l != nil && l.Kind == tree.Seq {
+			for _, n := range l.Items {
+				if s, _ := n.Str(); it.Kind == 'N' && field == "serves" && s == "mission" {
 					continue
 				}
-				add("serves", n)
+				add(field, n)
 			}
 		}
 	}
-	add("mirrors", it.Node.Get("mirrors"))
+	if it.Kind == 'N' {
+		list("stakeholders")
+	}
+	if it.Kind == 'N' || it.Kind == 'R' {
+		list("serves")
+	}
+	if it.Kind != 'T' {
+		add("mirrors", it.Node.Get("mirrors"))
+	}
 	return out
 }
 
@@ -130,8 +204,6 @@ type Retired struct {
 	Line  int
 	// Owner is the item whose list holds the entry, or nil for a file's list.
 	Owner *Item
-	// Holds lists the kinds of item the list retires.
-	Holds string
 }
 
 // Ref is one id named in a field.
@@ -154,7 +226,7 @@ type Set struct {
 	// duplicates included.
 	Retired []*Retired
 
-	byID    map[string]*Item
+	byPath  map[string]*Item
 	retired map[string]*Retired
 	named   map[string][]Ref
 }
@@ -164,7 +236,7 @@ type Set struct {
 // set only. Items and entries without an id are left out, an item's children
 // with it.
 func New(files []*File) *Set {
-	s := &Set{byID: map[string]*Item{}, retired: map[string]*Retired{}, named: map[string][]Ref{}}
+	s := &Set{byPath: map[string]*Item{}, retired: map[string]*Retired{}, named: map[string][]Ref{}}
 	s.Files = slices.Clone(files)
 	for _, f := range s.Files {
 		f.Mission = path.Base(f.Path) == set.MissionName
@@ -182,22 +254,21 @@ func New(files []*File) *Set {
 		if f.Tree == nil {
 			continue
 		}
-		if f.Mission {
-			s.collect(f, "objectives", 'O')
-			s.collect(f, "stakeholders", 'S')
-			s.collect(f, "needs", 'N')
-			f.Retired = s.collectRetired(f, f.Tree.Get("retired"), nil, "OSN")
-		} else {
-			s.collect(f, "requirements", 'R')
-			f.Retired = s.collectRetired(f, f.Tree.Get("retired"), nil, "R")
+		if list := f.Tree.Get("items"); list != nil && list.Kind == tree.Seq {
+			for _, n := range list.Items {
+				if it := s.collectItem(f, n, nil); it != nil {
+					f.Items = append(f.Items, it)
+				}
+			}
 		}
+		f.Retired = s.collectRetired(f, f.Tree.Get("retired"), nil)
 	}
 	for _, it := range s.Items {
-		if _, gone := s.retired[it.ID]; gone {
+		if _, gone := s.retired[it.Path()]; gone {
 			continue
 		}
-		if _, dup := s.byID[it.ID]; !dup {
-			s.byID[it.ID] = it
+		if _, dup := s.byPath[it.Path()]; !dup {
+			s.byPath[it.Path()] = it
 		}
 	}
 	for _, it := range s.Items {
@@ -208,37 +279,25 @@ func New(files []*File) *Set {
 	return s
 }
 
-func (s *Set) collect(f *File, key string, kind byte) {
-	list := f.Tree.Get(key)
-	if list == nil || list.Kind != tree.Seq {
-		return
-	}
-	for _, n := range list.Items {
-		if it := s.collectItem(f, n, kind, nil); it != nil {
-			f.Items = append(f.Items, it)
-		}
-	}
-}
-
-func (s *Set) collectItem(f *File, n *tree.Node, kind byte, parent *Item) *Item {
+func (s *Set) collectItem(f *File, n *tree.Node, parent *Item) *Item {
 	id, ok := n.Get("id").Str()
 	if !ok || id == "" {
 		return nil
 	}
-	it := &Item{Kind: kind, ID: id, File: f, Node: n, Parent: parent}
+	it := &Item{Kind: id[0], ID: id, File: f, Node: n, Parent: parent}
 	s.Items = append(s.Items, it)
 	if children := n.Get("children"); children != nil && children.Kind == tree.Seq {
 		for _, ch := range children.Items {
-			if c := s.collectItem(f, ch, kind, it); c != nil {
+			if c := s.collectItem(f, ch, it); c != nil {
 				it.Children = append(it.Children, c)
 			}
 		}
 	}
-	it.Retired = s.collectRetired(f, n.Get("retired"), it, string(kind))
+	it.Retired = s.collectRetired(f, n.Get("retired"), it)
 	return it
 }
 
-func (s *Set) collectRetired(f *File, list *tree.Node, owner *Item, holds string) []*Retired {
+func (s *Set) collectRetired(f *File, list *tree.Node, owner *Item) []*Retired {
 	if list == nil || list.Kind != tree.Seq {
 		return nil
 	}
@@ -249,35 +308,45 @@ func (s *Set) collectRetired(f *File, list *tree.Node, owner *Item, holds string
 			continue
 		}
 		title, _ := n.Get("title").Str()
-		e := &Retired{ID: id, Title: title, File: f, Line: n.Line, Owner: owner, Holds: holds}
+		e := &Retired{ID: id, Title: title, File: f, Line: n.Line, Owner: owner}
 		out = append(out, e)
 		s.Retired = append(s.Retired, e)
-		if _, dup := s.retired[id]; !dup {
-			s.retired[id] = e
+		if _, dup := s.retired[Path(id)]; !dup {
+			s.retired[Path(id)] = e
 		}
 	}
 	return out
 }
 
-// Item returns the item with id, or nil. Of two items with one id, the first
-// read counts; an id that is retired names no item.
-func (s *Set) Item(id string) *Item { return s.byID[id] }
+// Item returns the item with id, or nil. Of two items with one path, the
+// first read counts; a path that is retired names no item.
+func (s *Set) Item(id string) *Item {
+	if it := s.byPath[Path(id)]; it != nil && it.ID == id {
+		return it
+	}
+	return nil
+}
 
-// RetiredEntry returns the first entry that retires id itself, or nil.
-func (s *Set) RetiredEntry(id string) *Retired { return s.retired[id] }
+// AtPath returns the item with the path of id, whatever its letter, or nil.
+func (s *Set) AtPath(id string) *Item { return s.byPath[Path(id)] }
 
-// RetiredWith returns the entry that retires id, itself or with an ancestor,
-// or nil.
+// RetiredEntry returns the first entry that retires the path of id itself,
+// under any letter, or nil.
+func (s *Set) RetiredEntry(id string) *Retired { return s.retired[Path(id)] }
+
+// RetiredWith returns the entry that retires the path of id, itself or with
+// an ancestor, or nil.
 func (s *Set) RetiredWith(id string) *Retired {
+	p := Path(id)
 	for {
-		if e, ok := s.retired[id]; ok {
+		if e, ok := s.retired[p]; ok {
 			return e
 		}
-		i := strings.LastIndex(id, ".")
+		i := strings.LastIndex(p, ".")
 		if i < 0 {
 			return nil
 		}
-		id = id[:i]
+		p = p[:i]
 	}
 }
 

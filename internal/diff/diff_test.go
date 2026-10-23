@@ -12,21 +12,23 @@ import (
 	"shall/internal/testfile"
 )
 
-const mission = `mission: m
-ranking: [O1]
-objectives:
-  - {id: O1, title: A, text: t, measure: m}
-  - {id: O2, title: B, text: t, measure: m}
-stakeholders:
-  - {id: S1, title: A, text: t}
-needs:
-  - {id: N1, title: A, text: t, stakeholder: S1, serves: [O1], status: hypothesis}
-  - {id: N2, title: B, text: t, stakeholder: S1, serves: [O1], status: hypothesis}
+const mission = `title: M
+mission: m
+ranking: [O90]
+items:
+  - {id: O90, title: A, text: t, measure: m}
+  - {id: O91, title: B, text: t, measure: m}
+  - id: S92
+    title: A
+    text: t
+    children:
+      - {id: N92.1, title: A, text: t, serves: [O90], status: hypothesis}
+      - {id: N92.2, title: B, text: t, serves: [O90], status: hypothesis}
 `
 
 // req returns a requirement written on one line.
 func req(id, title, text, rest string) string {
-	return "  - {id: " + id + ", title: " + title + ", text: " + text + ", serves: [N1], status: draft" + rest + "}\n"
+	return "  - {id: " + id + ", title: " + title + ", text: " + text + ", serves: [N92.1], status: draft" + rest + "}\n"
 }
 
 // compare reads dir at base and head and compares them.
@@ -79,16 +81,16 @@ func TestItemsComparedById(t *testing.T) {
 	base := testfile.Commit(t, dir, map[string]string{
 		"shall.yaml":         "name: x\nformat: 1\n",
 		"mission.shall.yaml": mission,
-		"a.shall.yaml": "title: A\nrequirements:\n" + req("R1", "One", "The tool SHALL do one thing.", "") +
+		"a.shall.yaml": "title: A\nitems:\n" + req("R1", "One", "The tool SHALL do one thing.", "") +
 			req("R2", "Two", "The tool SHALL do two.", "") + req("R3", "Three", "The tool SHALL do three.", "") +
 			req("R5", "Five", "The tool SHALL do five.", "") + req("R6", "Six", "The tool SHALL do six.", ""),
-		"b.shall.yaml": "title: B\nrequirements:\n" + req("R10", "Ten", "The tool SHALL do ten.", ""),
+		"b.shall.yaml": "title: B\nitems:\n" + req("R10", "Ten", "The tool SHALL do ten.", ""),
 	})
 	head := testfile.Commit(t, dir, map[string]string{
-		"a.shall.yaml": "title: A\nrequirements:\n" + req("R3", "Three", "The tool SHALL do three.", "") +
-			strings.Replace(req("R1", "One", "The tool SHALL do one other thing.", ""), "serves: [N1]", "serves: [N1, N2]", 1) +
+		"a.shall.yaml": "title: A\nitems:\n" + req("R3", "Three", "The tool SHALL do three.", "") +
+			strings.Replace(req("R1", "One", "The tool SHALL do one other thing.", ""), "serves: [N92.1]", "serves: [N92.1, N92.2]", 1) +
 			req("R4", "Four", "The tool SHALL do four.", "") + "retired:\n  - {id: R6, title: Six}\n",
-		"b.shall.yaml": "title: B\nrequirements:\n" + req("R10", "Ten", "The tool SHALL do ten.", "") + req("R2", "Two", "The tool SHALL do two.", ""),
+		"b.shall.yaml": "title: B\nitems:\n" + req("R10", "Ten", "The tool SHALL do ten.", "") + req("R2", "Two", "The tool SHALL do two.", ""),
 	})
 	r := compare(t, dir, base, head)
 	want := "R1:changed/text/serves R4:added R2:changed<a.shall.yaml R5:removed R6:retired"
@@ -102,8 +104,8 @@ func TestItemsComparedById(t *testing.T) {
 	if r1.Fields[0].Old != "The tool SHALL do one thing." || r1.Fields[0].New != "The tool SHALL do one other thing." {
 		t.Errorf("R1's text = %+v, want the old and the new text whole", r1.Fields[0])
 	}
-	if old, ok := r1.Fields[1].Old.([]any); !ok || len(old) != 1 || old[0] != "N1" {
-		t.Errorf("R1's old serves = %#v, want the list [N1]", r1.Fields[1].Old)
+	if old, ok := r1.Fields[1].Old.([]any); !ok || len(old) != 1 || old[0] != "N92.1" {
+		t.Errorf("R1's old serves = %#v, want the list [N92.1]", r1.Fields[1].Old)
 	}
 }
 
@@ -111,7 +113,7 @@ func TestEffectiveStatusOfAParent(t *testing.T) {
 	t.Attr("verifies", "R38.2")
 	dir := testfile.Repo(t)
 	chapter := func(child string) string {
-		return "title: A\nrequirements:\n  - id: R1\n    title: One\n    text: The tool SHALL work.\n    serves: [N1]\n    status: implemented\n" +
+		return "title: A\nitems:\n  - id: R1\n    title: One\n    text: The tool SHALL work.\n    serves: [N92.1]\n    status: implemented\n" +
 			"    children:\n      - {id: R1.1, title: Part, text: The tool SHALL work in part., status: " + child + "}\n"
 	}
 	base := testfile.Commit(t, dir, map[string]string{"shall.yaml": "name: x\nformat: 1\n", "mission.shall.yaml": mission, "a.shall.yaml": chapter("implemented")})
@@ -135,14 +137,14 @@ func TestSetsChaptersAndFindings(t *testing.T) {
 	base := testfile.Commit(t, dir, map[string]string{
 		"shall.yaml":              "name: x\nformat: 1\npath: main\n",
 		"main/mission.shall.yaml": mission,
-		"main/a.shall.yaml":       "title: A\nrequirements:\n  - {id: R1, title: One, text: The tool SHALL work., status: draft}\n",
-		"main/c.shall.yaml":       "title: C\nrequirements: []\n",
+		"main/a.shall.yaml":       "title: A\nitems:\n  - {id: R1, title: One, text: The tool SHALL work., status: draft}\n",
+		"main/c.shall.yaml":       "title: C\nitems: []\n",
 	})
 	head := testfile.Commit(t, dir, map[string]string{
 		"shall.yaml":                "name: y\nformat: 1\npath: main\ndepends:\n  company:\n    path: std\n",
-		"main/m/mission.shall.yaml": strings.Replace(strings.Replace(mission, "mission: m", "mission: n", 1), "ranking: [O1]", "ranking: [O2, O1]", 1),
-		"main/a.shall.yaml":         "title: Alpha\nrequirements:\n" + req("R1", "One", "The tool SHALL work.", ""),
-		"main/d.shall.yaml":         "title: D\nrequirements: []\n",
+		"main/m/mission.shall.yaml": strings.Replace(strings.Replace(mission, "mission: m", "mission: n", 1), "ranking: [O90]", "ranking: [O91, O90]", 1),
+		"main/a.shall.yaml":         "title: Alpha\nitems:\n" + req("R1", "One", "The tool SHALL work.", ""),
+		"main/d.shall.yaml":         "title: D\nitems: []\n",
 		"other/shall.yaml":          "name: z\nformat: 1\n",
 		"other/mission.shall.yaml":  mission,
 	}, "main/c.shall.yaml", "main/mission.shall.yaml")
@@ -175,12 +177,31 @@ func TestSetsChaptersAndFindings(t *testing.T) {
 	if len(s.Findings.Gone) != 1 || !strings.Contains(s.Findings.Gone[0].Message, "serves nothing") {
 		t.Errorf("gone findings = %+v, want R1 serving nothing", s.Findings.Gone)
 	}
-	if got := items(r); !strings.Contains(got, "R1:changed/serves") || !strings.Contains(got, "N1:added") {
+	if got := items(r); !strings.Contains(got, "R1:changed/serves") || !strings.Contains(got, "N92.1:added") {
 		t.Errorf("items = %s, want R1's serves changed and the new set's items added", got)
 	}
 	back := compare(t, dir, head, base)
 	if len(back.Sets) != 2 || back.Sets[0].Manifest != "other/shall.yaml" || back.Sets[0].Change != "removed" || back.Sets[0].Name != "z" {
 		t.Errorf("diff the other way =\n%s\nwant other/shall.yaml, set z, removed", text(back))
+	}
+}
+
+func TestTheMissionFileNamedAsSuch(t *testing.T) {
+	t.Attr("verifies", "R39.3")
+	dir := testfile.Repo(t)
+	base := testfile.Commit(t, dir, map[string]string{
+		"shall.yaml":         "name: x\nformat: 1\n",
+		"mission.shall.yaml": strings.Replace(mission, "title: M", "title: Why The Machine Exists", 1),
+	})
+	head := testfile.Commit(t, dir, map[string]string{
+		"mission.shall.yaml": strings.Replace(mission, "title: M", "title: Why The Coffee Machine Exists", 1),
+	})
+	r := compare(t, dir, base, head)
+	if f := r.Sets[0].Files; len(f) != 1 || !f[0].Mission || f[0].Change != "retitled" {
+		t.Errorf("files = %+v, want the mission file retitled", f)
+	}
+	if got, want := text(r), "  mission.shall.yaml: mission file retitled Why The {+Coffee+} Machine Exists\n"; !strings.Contains(got, want) {
+		t.Errorf("text =\n%s\nwant it to hold %q", got, want)
 	}
 }
 
@@ -190,15 +211,15 @@ func TestAFindingThatOnlyMoved(t *testing.T) {
 	// R1 serves nothing, and R3 serves R6, which is retired: two warnings,
 	// the second naming the line that retires R6.
 	unchanged := "  - {id: R1, title: One, text: The tool SHALL work., status: draft}\n" +
-		strings.Replace(req("R3", "Three", "The tool SHALL do three.", ""), "serves: [N1]", "serves: [N1, R6]", 1) +
+		strings.Replace(req("R3", "Three", "The tool SHALL do three.", ""), "serves: [N92.1]", "serves: [N92.1, R6]", 1) +
 		"retired:\n  - {id: R6, title: Six}\n"
 	base := testfile.Commit(t, dir, map[string]string{
 		"shall.yaml":         "name: x\nformat: 1\n",
 		"mission.shall.yaml": mission,
-		"a.shall.yaml":       "title: A\nrequirements:\n" + unchanged,
+		"a.shall.yaml":       "title: A\nitems:\n" + unchanged,
 	})
 	head := testfile.Commit(t, dir, map[string]string{
-		"a.shall.yaml": "title: A\nrequirements:\n" + req("R2", "Two", "The tool SHALL start.", "") + unchanged,
+		"a.shall.yaml": "title: A\nitems:\n" + req("R2", "Two", "The tool SHALL start.", "") + unchanged,
 	})
 	r := compare(t, dir, base, head)
 	if len(r.Sets) != 1 {
@@ -231,10 +252,10 @@ func TestRefsAndTheWorkingTree(t *testing.T) {
 	first := testfile.Commit(t, dir, map[string]string{
 		"doc/shall.yaml":         "name: x\nformat: 1\n",
 		"doc/mission.shall.yaml": mission,
-		"doc/a.shall.yaml":       "title: A\nrequirements:\n" + req("R1", "One", "The tool SHALL work.", ""),
+		"doc/a.shall.yaml":       "title: A\nitems:\n" + req("R1", "One", "The tool SHALL work.", ""),
 		"other/shall.yaml":       "name: other\nformat: 1\n",
 	})
-	second := testfile.Commit(t, dir, map[string]string{"doc/a.shall.yaml": "title: A\nrequirements:\n" + req("R1", "One", "The tool SHALL work well.", "")})
+	second := testfile.Commit(t, dir, map[string]string{"doc/a.shall.yaml": "title: A\nitems:\n" + req("R1", "One", "The tool SHALL work well.", "")})
 	doc := filepath.Join(dir, "doc")
 
 	if r := compare(t, doc, empty, first); r.Totals.Added != 6 || len(r.Sets) != 1 || r.Sets[0].Manifest != "shall.yaml" {
@@ -243,7 +264,7 @@ func TestRefsAndTheWorkingTree(t *testing.T) {
 	if got, want := items(compare(t, doc, first, second)), "R1:changed/text"; got != want {
 		t.Errorf("between two commits: %s, want %s", got, want)
 	}
-	testfile.WriteFile(t, filepath.Join(doc, "b.shall.yaml"), "title: B\nrequirements:\n"+req("R2", "Two", "The tool SHALL do two.", ""))
+	testfile.WriteFile(t, filepath.Join(doc, "b.shall.yaml"), "title: B\nitems:\n"+req("R2", "Two", "The tool SHALL do two.", ""))
 	if got, want := items(compare(t, doc, "HEAD", "")), "R2:added"; got != want {
 		t.Errorf("the working tree against HEAD: %s, want %s, from a file git does not track", got, want)
 	}
@@ -277,7 +298,7 @@ func TestRefsAndTheWorkingTree(t *testing.T) {
 func TestSetFilesElsewhereInTheRepository(t *testing.T) {
 	t.Attr("verifies", "R37.3")
 	dir := testfile.Repo(t)
-	chapter := func(text string) string { return "title: A\nrequirements:\n" + req("R1", "One", text, "") }
+	chapter := func(text string) string { return "title: A\nitems:\n" + req("R1", "One", text, "") }
 	first := testfile.Commit(t, dir, map[string]string{
 		"doc/shall.yaml":          "name: x\nformat: 1\npath: ../reqs\n",
 		"reqs/mission.shall.yaml": mission,
@@ -318,12 +339,12 @@ func TestWhitespaceIsNoChange(t *testing.T) {
 	t.Attr("verifies", "R37.7")
 	dir := testfile.Repo(t)
 	block := func(text string) string {
-		return "title: \"Two  Colours\"\nrequirements:\n  - id: R1\n    title: One\n    text: |\n" + text + "    serves: [N1]\n    status: draft\n"
+		return "title: \"Two  Colours\"\nitems:\n  - id: R1\n    title: One\n    text: |\n" + text + "    serves: [N92.1]\n    status: draft\n"
 	}
 	base := testfile.Commit(t, dir, map[string]string{
 		"shall.yaml":         "name: x\nformat: 1\n",
 		"mission.shall.yaml": mission,
-		"a.shall.yaml":       "title: Two Colours\nrequirements:\n" + req("R1", "One", "The tool SHALL work well.", ""),
+		"a.shall.yaml":       "title: Two Colours\nitems:\n" + req("R1", "One", "The tool SHALL work well.", ""),
 	})
 	head := testfile.Commit(t, dir, map[string]string{
 		"mission.shall.yaml": strings.Replace(mission, "mission: m", "mission: |\n  m\n", 1),
@@ -339,6 +360,46 @@ func TestWhitespaceIsNoChange(t *testing.T) {
 	}
 	if f := r.Sets[0].Items[0].Fields[0]; f.Old != "The tool SHALL\nwork   well.  \n" || f.New != "The tool SHALL\nwork better.\n" {
 		t.Errorf("R1's text = %q to %q, want both as written", f.Old, f.New)
+	}
+}
+
+func TestATopicsMarkdown(t *testing.T) {
+	t.Attr("verifies", "R37.7")
+	t.Attr("verifies", "R40.1.1")
+	dir := testfile.Repo(t)
+	topic := func(text string) string {
+		var b strings.Builder
+		b.WriteString("title: A\nitems:\n  - id: T1\n    title: Terms\n    text: |\n")
+		for _, line := range strings.SplitAfter(text, "\n") {
+			if strings.TrimSpace(line) != "" {
+				b.WriteString("      ")
+			}
+			b.WriteString(line)
+		}
+		return b.String()
+	}
+	base := testfile.Commit(t, dir, map[string]string{
+		"shall.yaml":         "name: x\nformat: 1\n",
+		"mission.shall.yaml": mission,
+		"a.shall.yaml":       topic("First paragraph\ngoes on.\n\nSecond.\n\n- one\n- two\n"),
+	})
+	rewrapped := testfile.Commit(t, dir, map[string]string{"a.shall.yaml": topic("First paragraph goes on.\n\nSecond.\n\n- one\n- two\n")})
+	merged := testfile.Commit(t, dir, map[string]string{"a.shall.yaml": topic("First paragraph\ngoes on.\nSecond.\n\n- one\n- two\n")})
+	joined := testfile.Commit(t, dir, map[string]string{"a.shall.yaml": topic("First paragraph\ngoes on.\n\nSecond.\n\n- one - two\n")})
+	if r := compare(t, dir, base, rewrapped); r.Changed() {
+		t.Errorf("a paragraph rewrapped =\n%s\nwant nothing changed: it reads as the same blocks", text(r))
+	}
+	for _, c := range []struct{ name, head, want string }{
+		{"two paragraphs merged", merged, "      text: First paragraph goes on.[-↵↵-]{+↵+}Second. - one - …\n"},
+		{"two list items joined", joined, "      text: … on. Second. - one[-↵-]{+·+}- two\n"},
+	} {
+		r := compare(t, dir, base, c.head)
+		if got := items(r); got != "T1:changed/text" {
+			t.Errorf("%s: items = %s, want T1's text changed", c.name, got)
+		}
+		if got := text(r); !strings.Contains(got, c.want) {
+			t.Errorf("%s: text =\n%s\nwant it to hold %q", c.name, got, c.want)
+		}
 	}
 }
 
@@ -386,7 +447,7 @@ func TestChangedWordsMarked(t *testing.T) {
 	}
 	var changes []change
 	for _, c := range cases {
-		changes = append(changes, change{c.old, c.cur})
+		changes = append(changes, change{old: c.old, cur: c.cur})
 	}
 	for _, config := range []string{"", hostile} {
 		path := filepath.Join(t.TempDir(), "gitconfig")
@@ -428,11 +489,11 @@ func TestADiffToRead(t *testing.T) {
 	base := testfile.Commit(t, dir, map[string]string{
 		"shall.yaml":         "name: x\nformat: 1\n",
 		"mission.shall.yaml": mission,
-		"a.shall.yaml":       "title: Two Colours\nrequirements:\n" + req("R1", "One", "The tool SHALL work.", "") + req("R2", "Two", "The tool SHALL do two.", ""),
+		"a.shall.yaml":       "title: Two Colours\nitems:\n" + req("R1", "One", "The tool SHALL work.", "") + req("R2", "Two", "The tool SHALL do two.", ""),
 	})
 	head := testfile.Commit(t, dir, map[string]string{
-		"a.shall.yaml": "title: Few Colours\nrequirements:\n" + req("R1", "One", "The tool SHALL work well.", ""),
-		"b.shall.yaml": "title: B\nrequirements:\n" + req("R2", "Two", "The tool SHALL do two.", "") + req("R3", "Three", "The tool SHALL do three.", ""),
+		"a.shall.yaml": "title: Few Colours\nitems:\n" + req("R1", "One", "The tool SHALL work well.", ""),
+		"b.shall.yaml": "title: B\nitems:\n" + req("R2", "Two", "The tool SHALL do two.", "") + req("R3", "Three", "The tool SHALL do three.", ""),
 	})
 	var b bytes.Buffer
 	if err := WriteText(&b, compare(t, dir, base, head)); err != nil {
@@ -513,13 +574,13 @@ func TestADiffForScripts(t *testing.T) {
 	base := testfile.Commit(t, dir, map[string]string{
 		"shall.yaml":         "name: x\nformat: 1\n",
 		"mission.shall.yaml": mission,
-		"a.shall.yaml": "title: A\nrequirements:\n" + req("R1", "One", "The tool SHALL work.", "") +
+		"a.shall.yaml": "title: A\nitems:\n" + req("R1", "One", "The tool SHALL work.", "") +
 			req("R2", "Two", "The tool SHALL do two.", because) + req("R3", "Three", "The tool SHALL do three.", because),
 	})
 	head := testfile.Commit(t, dir, map[string]string{
-		"a.shall.yaml": "title: A\nrequirements:\n" + req("R2", "Two", "The tool SHALL do two.", ", rationale: null") +
+		"a.shall.yaml": "title: A\nitems:\n" + req("R2", "Two", "The tool SHALL do two.", ", rationale: null") +
 			req("R3", "Three", "The tool SHALL do three.", ""),
-		"b.shall.yaml": "title: B\nrequirements:\n" + strings.Replace(req("R1", "One", "The tool SHALL work.", ""), "serves: [N1]", "serves: [N1, N2]", 1),
+		"b.shall.yaml": "title: B\nitems:\n" + strings.Replace(req("R1", "One", "The tool SHALL work.", ""), "serves: [N92.1]", "serves: [N92.1, N92.2]", 1),
 	})
 	out, err := json.Marshal(compare(t, dir, base, head))
 	if err != nil {
@@ -548,7 +609,7 @@ func TestADiffForScripts(t *testing.T) {
 	if got.Base != base || got.Head != head || r1.ID != "R1" || r1.File != "b.shall.yaml" || r1.MovedFrom != "a.shall.yaml" || got.Totals.Moved != 1 {
 		t.Errorf("JSON = %s, want R1 moved from a.shall.yaml to b.shall.yaml", out)
 	}
-	if f := r1.Fields[0]; string(f["field"]) != `"serves"` || string(f["old"]) != `["N1"]` || string(f["new"]) != `["N1","N2"]` {
+	if f := r1.Fields[0]; string(f["field"]) != `"serves"` || string(f["old"]) != `["N92.1"]` || string(f["new"]) != `["N92.1","N92.2"]` {
 		t.Errorf("R1's serves in JSON = %s, want the old and new lists whole", f)
 	}
 	if f := r2.Fields[0]; r2.ID != "R2" || string(f["field"]) != `"rationale"` || string(f["new"]) != "null" {
@@ -576,7 +637,7 @@ func TestARefReadsAsOnDisk(t *testing.T) {
 	t.Attr("verifies", "R41")
 	dir := testfile.Repo(t)
 	chapter := func(id, title string) string {
-		return "title: " + title + "\nrequirements:\n" + req(id, "One", "The tool SHALL work.", "")
+		return "title: " + title + "\nitems:\n" + req(id, "One", "The tool SHALL work.", "")
 	}
 	testfile.WriteFile(t, filepath.Join(dir, "src", "a.yaml"), chapter("R1", "A"))
 	testfile.WriteFile(t, filepath.Join(dir, "..", "elsewhere.yaml"), chapter("R9", "Elsewhere"))

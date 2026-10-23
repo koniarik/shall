@@ -1,161 +1,151 @@
 ---
+title: Why shall Exists
 mission: shall keeps a product's mission, needs and requirements as reviewed text in git, so that
   people and agents can check them, browse them and discuss changes to them in one place.
 
-ranking: [O1, O2, O3, O4, O5, O6, O7]
-objectives:
-  - id: O1
+ranking: [O45, O46, O47, O48, O49, O50, O51]
+items:
+  - id: O45
     title: Machine-Checked
     text: Every rule the format states, including which links are required, is enforced by shall
       itself.
     measure: rules the format states that the checker does not enforce; errors that fail to name
       the file, id and field at fault.
-  - id: O2
+  - id: O46
     title: Reads As A Document
     text: A specification reads as a document, statements first and details on demand, while
       every statement stays addressable.
     measure: clicks from any id to the statement it names; time for a reader to find a
       requirement by id or by its text.
-  - id: O3
+  - id: O47
     title: Reviewed In Git
     text: Changes are reviewed as git changes, compared by id between any two refs and discussed
       in comments that stay on their statement and appear on the pull request.
     measure: review comments that lose their statement after an edit; changes a reviewer cannot
       judge without reading YAML.
-  - id: O4
+  - id: O48
     title: Git Is The Only Store
     text: Everything shall knows lives in the repository's files and in the hosting service's
       review threads.
     measure: state shall keeps anywhere else; commits shall makes on its own.
-  - id: O5
+  - id: O49
     title: Scriptable
     text: Every query, check, diff and edit the interface offers is available from the command
       line as JSON.
     measure: interface features with no command-line equivalent.
-  - id: O6
+  - id: O50
     title: Cheap To Adopt
     text: A project adopts shall by adding files and one hook, and files written for an older
       version still read.
     measure: steps from an empty repository to a passing check; format changes that ship without
       a migration.
-  - id: O7
+  - id: O51
     title: Composable
     text: A product's requirements build on shared sets, each a repository or a path in one,
       pinned to a version.
     measure: items affected by an upstream upgrade that shall does not flag; upstream items a
       product does not mirror.
 
-stakeholders:
-  - id: S1
+  - id: S52
     title: Author
     text: Writes the mission, needs and requirements of a product, usually as its product owner.
-  - id: S2
+    children:
+      - id: N52.1
+        title: Restructure Safely
+        text: Write and restructure a specification without editing ids or links by hand.
+        serves: [O45, O50]
+        status: hypothesis
+      - id: N52.2
+        title: Upgrade Impact
+        text: Upgrade an upstream set and see exactly which of their items it affects.
+        serves: [O51, O47]
+        status: hypothesis
+      - id: N52.3
+        title: Visible Waivers
+        text: Waive an upstream requirement with a reason that reviewers see.
+        serves: [O51, O45]
+        status: hypothesis
+      - id: N52.4
+        title: One Hook To Adopt
+        text: Adopt shall in an existing repository with one hook entry.
+        serves: [O50]
+        status: hypothesis
+      - id: N52.5
+        title: See It As I Write
+        text: See what I write as readers will see it, while I write it.
+        serves: [O46]
+        status: hypothesis
+
+  - id: S53
     title: Reviewer
     text: Reviews proposed changes and comments on them.
-  - id: S3
+    children:
+      - id: N53.1
+        title: Changes Since Approval
+        text: See only what changed since they last approved, statement by statement.
+        serves: [O47]
+        status: hypothesis
+      - id: N53.2
+        title: Comment Without Git
+        text: Comment on a statement without knowing git or YAML.
+        serves: [O47, O46]
+        status: hypothesis
+      - id: N53.3
+        title: Read As A Document
+        text: Read a set as a document, and reach any item it names in one step.
+        serves: [O46]
+        status: hypothesis
+      - id: N53.4
+        title: Understood From The Set Alone
+        text: Understand what each requirement means from the set itself, with the terms and the
+          design it rests on explained where I read it.
+        serves: [O46]
+        status: hypothesis
+  - id: S54
     title: Implementer
     text: Builds and tests what the requirements promise.
-  - id: S4
+    children:
+      - id: N54.1
+        title: Why And How Verified
+        text: From a statement, see what it serves and the evidence that it holds.
+        serves: [O46, O45]
+        status: hypothesis
+  - id: S55
     title: Agent
     text: Reads and edits the files and runs the checks without a human.
-  - id: S5
+    children:
+      - id: N55.1
+        title: Command Line For Agents
+        text: Query, check, diff and edit from the command line, with errors it can act on.
+        serves: [O49, O45]
+        status: hypothesis
+  - id: S56
     title: Department Manager
     text: Wants the same structure and comparable reports across every project.
-  - id: S6
+    children:
+      - id: N56.1
+        title: Same Structure Everywhere
+        text: The same structure and reports across every project.
+        serves: [O50, O45]
+        status: hypothesis
+      - id: N56.2
+        title: Shared Sets Maintained Once
+        text: Maintain company and department sets once, with each product pinned to a version of
+          them.
+        serves: [O51, O50]
+        status: hypothesis
+  - id: S57
     title: shall Maintainer
     text: Develops shall.
-
-needs:
-  - id: N1
-    title: Restructure Safely
-    stakeholder: S1
-    text: Write and restructure a specification without editing ids or links by hand.
-    serves: [O1, O6]
-    status: hypothesis
-  - id: N2
-    title: Changes Since Approval
-    stakeholder: S2
-    text: See only what changed since they last approved, statement by statement.
-    serves: [O3]
-    status: hypothesis
-  - id: N3
-    title: Comment Without Git
-    stakeholder: S2
-    text: Comment on a statement without knowing git or YAML.
-    serves: [O3, O2]
-    status: hypothesis
-  - id: N4
-    title: Why And How Verified
-    stakeholder: S3
-    text: From a statement, see what it serves and the evidence that it holds.
-    serves: [O2, O1]
-    status: hypothesis
-  - id: N5
-    title: Command Line For Agents
-    stakeholder: S4
-    text: Query, check, diff and edit from the command line, with errors it can act on.
-    serves: [O5, O1]
-    status: hypothesis
-  - id: N6
-    title: Same Structure Everywhere
-    stakeholder: S5
-    text: The same structure and reports across every project.
-    serves: [O6, O1]
-    status: hypothesis
-  - id: N7
-    title: Migrations Ship With Formats
-    stakeholder: S6
-    text: Format changes ship with a migration, and old files keep reading.
-    serves: [O6]
-    status: hypothesis
-  - id: N8
-    title: Shared Sets Maintained Once
-    stakeholder: S5
-    text: Maintain company and department sets once, with each product pinned to a version of
-      them.
-    serves: [O7, O6]
-    status: hypothesis
-  - id: N9
-    title: Upgrade Impact
-    stakeholder: S1
-    text: Upgrade an upstream set and see exactly which of their items it affects.
-    serves: [O7, O3]
-    status: hypothesis
-  - id: N10
-    title: Visible Waivers
-    stakeholder: S1
-    text: Waive an upstream requirement with a reason that reviewers see.
-    serves: [O7, O1]
-    status: hypothesis
-  - id: N11
-    title: One Hook To Adopt
-    stakeholder: S1
-    text: Adopt shall in an existing repository with one hook entry.
-    serves: [O6]
-    status: hypothesis
-  - id: N12
-    title: Readable Code
-    stakeholder: S6
-    text: Contributors and agents can read and change the code without first learning a house
-      style.
-    serves: [mission]
-    status: hypothesis
-  - id: N13
-    title: Read As A Document
-    stakeholder: S2
-    text: Read a set as a document, and reach any item it names in one step.
-    serves: [O2]
-    status: hypothesis
-  - id: N15
-    title: Understood From The Set Alone
-    stakeholder: S2
-    text: Understand what each requirement means from the set itself, with the terms and the
-      design it rests on explained where I read it.
-    serves: [O2]
-    status: hypothesis
-  - id: N14
-    title: See It As I Write
-    stakeholder: S1
-    text: See what I write as readers will see it, while I write it.
-    serves: [O2]
-    status: hypothesis
+    children:
+      - id: N57.1
+        title: Migrations Ship With Formats
+        text: Format changes ship with a migration, and old files keep reading.
+        serves: [O50]
+        status: hypothesis
+      - id: N57.2
+        title: Readable Code
+        text: Contributors and agents can read and change the code without first learning a house
+          style.
+        serves: [mission]
+        status: hypothesis

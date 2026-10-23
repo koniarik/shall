@@ -124,6 +124,9 @@ func (s *Server) Handler() http.Handler {
 	return s.guard(mux)
 }
 
+// policy is the Content-Security-Policy of every answer.
+const policy = "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+
 func (s *Server) guard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.local && !loopbackHost(r.Host) {
@@ -131,7 +134,9 @@ func (s *Server) guard(next http.Handler) http.Handler {
 			return
 		}
 		h := w.Header()
-		h.Set("Content-Security-Policy", "default-src 'self'; frame-ancestors 'none'")
+		// Inline styles are allowed for the drawings Mermaid makes; scripts,
+		// images, fonts and connections stay the server's own.
+		h.Set("Content-Security-Policy", policy)
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r)

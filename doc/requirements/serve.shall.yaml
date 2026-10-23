@@ -1,12 +1,12 @@
 ---
 title: Serve
-requirements:
+items:
   - id: R25
     title: Serves The Sets Under A Directory
     text: When started, the server SHALL serve every set whose manifest lies under the given
       directory, the current one by default.
     rationale: The sets a reader browses are then the ones the checker checks.
-    serves: [N13]
+    serves: [N53.3]
     status: implemented
     children:
       - id: R25.1
@@ -53,13 +53,13 @@ requirements:
           requirements stand at each effective status.
         rationale: A department manager then compares the sets of several products at a
           glance, in the same terms for each.
-        serves: [N6]
+        serves: [N56.1]
         status: implemented
   - id: R26
     title: One Document Per Set
     text: The server SHALL show each set as one document, its mission file first and then its
       chapters, each item in the order its file holds it and each child under its parent.
-    serves: [N13]
+    serves: [N53.3]
     status: implemented
     children:
       - id: R26.1
@@ -112,7 +112,7 @@ requirements:
         rationale: The page shows what is on disk, even halfway through an edit, and the rest of
           the set stays readable. Showing the last version that parsed was not taken because the
           page would then show what no file holds.
-        serves: [N13, N14]
+        serves: [N53.3, N52.5]
         status: implemented
       - id: R26.9
         title: Chapters In Path Order
@@ -189,8 +189,8 @@ requirements:
         text: The server SHALL show a topic's text laid out as its Markdown reads, each image as a
           link to it and each diagram drawn.
         rationale: The page then loads nothing from outside the server.
-        serves: [N15]
-        status: approved
+        serves: [N53.4]
+        status: implemented
       - id: R26.17
         title: Progress Per Topic
         text: The server SHALL show beside each topic how many of the requirements below it stand
@@ -198,12 +198,12 @@ requirements:
         rationale: A topic has no status of its own. The count tells how far its part of the set
           has got, where the lowest status alone would make one draft among many verified
           requirements read as the whole.
-        status: approved
+        status: implemented
   - id: R27
     title: Ids Are Links
     text: The server SHALL show every id that a field names, and that names an item the server
       serves, as a link to that item.
-    serves: [N13]
+    serves: [N53.3]
     status: implemented
     children:
       - id: R27.1
@@ -252,7 +252,7 @@ requirements:
     title: Jump To An Id
     text: When the reader enters an id, the server SHALL show the document at that item, in the
       current set unless the id names another set.
-    serves: [N13]
+    serves: [N53.3]
     status: implemented
     children:
       - id: R28.1
@@ -270,7 +270,7 @@ requirements:
         title: Found By Words
         text: When the reader enters words, the server SHALL list the items whose id, title or
           text holds every one of them, those matching by id first, then by title, then by text.
-        rationale: A reader often knows what a requirement says before its id, and O2 measures
+        rationale: A reader often knows what a requirement says before its id, and O46 measures
           the time to find one by its text.
         status: implemented
   - id: R29
@@ -279,7 +279,7 @@ requirements:
       stand within two seconds, without the reader reloading the page.
     rationale: An author edits in their editor and reads in the browser, and the two stay in
       step.
-    serves: [N14]
+    serves: [N52.5]
     status: implemented
     children:
       - id: R29.1
@@ -300,7 +300,7 @@ requirements:
     text: The server SHALL show each finding that shall check reports for the set on the item it
       concerns, with its severity.
     rationale: The page and the checker then cannot disagree.
-    serves: [N13, N14]
+    serves: [N53.3, N52.5]
     status: implemented
     children:
       - id: R30.1
@@ -320,7 +320,7 @@ requirements:
     title: Black Or White
     text: The server SHALL let the reader switch its pages between black on white and white on
       black.
-    serves: [N13]
+    serves: [N53.3]
     status: implemented
     children:
       - id: R34.1
@@ -340,7 +340,7 @@ requirements:
     text: The server SHALL offer everything its pages show of a set as JSON over HTTP.
     rationale: A script or an agent then reads a set as the page does, with its ids resolved,
       its statuses worked out and its findings placed, without parsing YAML or HTML.
-    serves: [N5, N13]
+    serves: [N55.1, N53.3]
     status: implemented
     children:
       - id: R36.1

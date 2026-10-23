@@ -10,11 +10,14 @@ import (
 	"shall/internal/testfile"
 )
 
-const mission = `mission: m
-stakeholders:
-  - {id: S1, title: A, text: t}
-needs:
-  - {id: N1, title: A, text: t, stakeholder: S1, serves: [mission], status: hypothesis}
+const mission = `title: M
+mission: m
+items:
+  - id: S9
+    title: A
+    text: t
+    children:
+      - {id: N9.1, title: A, text: t, serves: [mission], status: hypothesis}
 `
 
 func run(t *testing.T, root string) []finding.Finding {
@@ -41,7 +44,7 @@ func TestTheManifestPathLocatesTheFiles(t *testing.T) {
 	got := run(t, testfile.Write(t, map[string]string{
 		"shall.yaml":                       "name: x\nformat: 1\npath: doc/req\n",
 		"doc/req/mission.shall.yaml":       mission,
-		"doc/req/sub/chapter.shall.yaml":   "title: C\nrequirements:\n  - {id: R1, title: A, text: no promise, serves: [N1], status: draft}\n",
+		"doc/req/sub/chapter.shall.yaml":   "title: C\nitems:\n  - {id: R1, title: A, text: no promise, serves: [N9.1], status: draft}\n",
 		"elsewhere/ignored.shall.yaml":     "not: [valid\n",
 		"doc/req/sub/notes-not-a-set.yaml": "anything: goes\n",
 	}))
@@ -66,8 +69,8 @@ func TestUnreadableFilesDoNotStopTheCheck(t *testing.T) {
 	root := testfile.Write(t, map[string]string{
 		"shall.yaml":         "name: x\nformat: 1\n",
 		"mission.shall.yaml": mission,
-		"a.shall.yaml":       "title: A\nrequirements: []\n",
-		"b.shall.yaml":       "title: B\nrequirements:\n  - {id: R1, title: A, text: no promise, serves: [N1], status: draft}\n",
+		"a.shall.yaml":       "title: A\nitems: []\n",
+		"b.shall.yaml":       "title: B\nitems:\n  - {id: R1, title: A, text: no promise, serves: [N9.1], status: draft}\n",
 	})
 	locked := filepath.Join(root, "a.shall.yaml")
 	if err := os.Chmod(locked, 0); err != nil {
@@ -124,7 +127,7 @@ func TestFilesThatAreNoYAML(t *testing.T) {
 	got := run(t, testfile.Write(t, map[string]string{
 		"shall.yaml":         "name: x\nformat: 1\n",
 		"mission.shall.yaml": mission,
-		"a.shall.yaml":       "title: A\nrequirements:\n  - [unclosed\n",
+		"a.shall.yaml":       "title: A\nitems:\n  - [unclosed\n",
 		"b/shall.yaml":       "name: [unclosed\n",
 	}))
 	for _, file := range []string{"a.shall.yaml", "b/shall.yaml"} {
@@ -161,8 +164,8 @@ func TestUnreadableDirectoriesDoNotStopTheCheck(t *testing.T) {
 	root := testfile.Write(t, map[string]string{
 		"shall.yaml":               "name: x\nformat: 1\n",
 		"mission.shall.yaml":       mission,
-		"locked/inside.shall.yaml": "title: A\nrequirements: []\n",
-		"open/chapter.shall.yaml":  "title: B\nrequirements:\n  - {id: R1, title: A, text: no promise, serves: [N1], status: draft}\n",
+		"locked/inside.shall.yaml": "title: A\nitems: []\n",
+		"open/chapter.shall.yaml":  "title: B\nitems:\n  - {id: R1, title: A, text: no promise, serves: [N9.1], status: draft}\n",
 	})
 	locked := filepath.Join(root, "locked")
 	if err := os.Chmod(locked, 0); err != nil {

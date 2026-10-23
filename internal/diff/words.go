@@ -8,14 +8,20 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // change is a value's old and new form, to be shown with its changed parts
-// marked.
-type change struct{ old, cur any }
+// marked. A spaced change shows its whitespace where its words are the
+// same.
+type change struct {
+	old, cur any
+	spaced   bool
+}
 
 // tokens returns what a change compares: the entries of its values when
 // they are lists, their words otherwise.
@@ -48,8 +54,15 @@ const context = 4
 func mark(changes []change) ([]string, error) {
 	pairs := make([][2][]string, len(changes))
 	lists := make([]bool, len(changes))
+	spacing := make([]bool, len(changes))
 	for i, c := range changes {
 		pairs[i][0], pairs[i][1], lists[i] = c.tokens()
+		a, aText := c.old.(string)
+		b, bText := c.cur.(string)
+		if c.spaced && aText && bText && slices.Equal(pairs[i][0], pairs[i][1]) {
+			pairs[i] = [2][]string{spaces.FindAllString(a, -1), spaces.FindAllString(b, -1)}
+			spacing[i] = true
+		}
 	}
 	runs, err := runsOf(pairs)
 	if err != nil {
@@ -59,6 +72,8 @@ func mark(changes []change) ([]string, error) {
 	for i, rs := range runs {
 		a, b := pairs[i][0], pairs[i][1]
 		switch {
+		case spacing[i]:
+			out[i] = spaced(rs)
 		case lists[i]:
 			out[i] = "[" + format(rs, ", ", false) + "]"
 		case len(a) > 0 && len(b) > 0 && 2*shared(rs) < max(len(a), len(b)):
@@ -87,6 +102,54 @@ func shared(runs []run) int {
 	return n
 }
 
+// spaces splits a text into its words and the whitespace between them.
+var spaces = regexp.MustCompile(`\s+|\S+`)
+
+// spaced returns runs of words and whitespace as a line of text: the
+// whitespace that changed made visible, a line break as ↵ and any other
+// space as ·, and only a few words kept around each change.
+func spaced(runs []run) string {
+	var b strings.Builder
+	for k, r := range runs {
+		s := strings.Join(r.tokens, "")
+		switch r.kind {
+		case '-':
+			b.WriteString("[-" + visible(s) + "-]")
+		case '+':
+			b.WriteString("{+" + visible(s) + "+}")
+		default:
+			first, last := k == 0, k == len(runs)-1
+			text := near(strings.Fields(s), " ", first, last)
+			if !first && s != strings.TrimLeftFunc(s, unicode.IsSpace) {
+				text = " " + text
+			}
+			if !last && s != strings.TrimRightFunc(s, unicode.IsSpace) {
+				text += " "
+			}
+			b.WriteString(text)
+		}
+	}
+	return b.String()
+}
+
+// visible returns whitespace as it shows in a change: a line break as ↵ and
+// any other space as ·.
+func visible(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '\n':
+			b.WriteString("↵")
+		case r == '\r':
+		case unicode.IsSpace(r):
+			b.WriteString("·")
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 // format returns runs as text, their tokens joined by sep; trim keeps only
 // the tokens near a change.
 func format(runs []run, sep string, trim bool) string {
@@ -103,21 +166,29 @@ func format(runs []run, sep string, trim bool) string {
 				parts = append(parts, "{+"+text+"+}")
 			}
 		default:
-			first, last := k == 0, k == len(runs)-1
-			t := r.tokens
-			switch {
-			case !trim || first && last:
-			case first && len(t) > context:
-				text = "… " + strings.Join(t[len(t)-context:], sep)
-			case last && len(t) > context:
-				text = strings.Join(t[:context], sep) + " …"
-			case !first && !last && len(t) > 2*context:
-				text = strings.Join(t[:context], sep) + " … " + strings.Join(t[len(t)-context:], sep)
+			if trim {
+				text = near(r.tokens, sep, k == 0, k == len(runs)-1)
 			}
 			parts = append(parts, text)
 		}
 	}
 	return strings.Join(parts, sep)
+}
+
+// near returns unchanged tokens joined by sep, keeping only those near a
+// change: the last few of the first run, the first few of the last, and a
+// few at each end of a run between two changes. A run alone stays whole.
+func near(t []string, sep string, first, last bool) string {
+	switch {
+	case first && last:
+	case first && len(t) > context:
+		return "… " + strings.Join(t[len(t)-context:], sep)
+	case last && len(t) > context:
+		return strings.Join(t[:context], sep) + " …"
+	case !first && !last && len(t) > 2*context:
+		return strings.Join(t[:context], sep) + " … " + strings.Join(t[len(t)-context:], sep)
+	}
+	return strings.Join(t, sep)
 }
 
 // runsOf returns each pair of token lists as runs. Git compares those that

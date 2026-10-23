@@ -22,11 +22,14 @@ import (
 
 const manifest = "name: x\nformat: 1\n"
 
-const mission = `mission: m
-stakeholders:
-  - {id: S1, title: A, text: t}
-needs:
-  - {id: N1, title: A, text: t, stakeholder: S1, serves: [mission], status: hypothesis}
+const mission = `title: M
+mission: m
+items:
+  - id: S9
+    title: A
+    text: t
+    children:
+      - {id: N9.1, title: A, text: t, serves: [mission], status: hypothesis}
 `
 
 func shall(t *testing.T, args ...string) (int, string) {
@@ -93,8 +96,8 @@ func TestCheckingGoesOnPastErrors(t *testing.T) {
 	_, r := jsonReport(t, testfile.Write(t, map[string]string{
 		"shall.yaml":         manifest,
 		"mission.shall.yaml": mission,
-		"a.shall.yaml":       "title: A\nrequirements: [\n",
-		"b.shall.yaml":       "title: B\nrequirements:\n  - {id: R1, title: X, text: no promise, serves: [N1], status: draft}\n",
+		"a.shall.yaml":       "title: A\nitems: [\n",
+		"b.shall.yaml":       "title: B\nitems:\n  - {id: R1, title: X, text: no promise, serves: [N9.1], status: draft}\n",
 	}))
 	files := map[string]bool{}
 	for _, f := range r.Findings {
@@ -110,7 +113,7 @@ func TestFindingsLocateThemselves(t *testing.T) {
 	_, r := jsonReport(t, testfile.Write(t, map[string]string{
 		"shall.yaml":         manifest,
 		"mission.shall.yaml": mission,
-		"c.shall.yaml":       "title: C\nrequirements:\n  - id: R1\n    title: X\n    text: The tool SHALL work.\n    serves: [N1]\n    status: done\n",
+		"c.shall.yaml":       "title: C\nitems:\n  - id: R1\n    title: X\n    text: The tool SHALL work.\n    serves: [N9.1]\n    status: done\n",
 	}))
 	if len(r.Findings) == 0 {
 		t.Fatal("no findings")
@@ -126,7 +129,7 @@ func TestFindingsAsText(t *testing.T) {
 	_, out := shall(t, "check", testfile.Write(t, map[string]string{
 		"shall.yaml":         manifest,
 		"mission.shall.yaml": mission,
-		"c.shall.yaml":       "title: C\nrequirements:\n  - {id: R1, title: X, text: The tool SHALL work., serves: [N1], status: done}\n",
+		"c.shall.yaml":       "title: C\nitems:\n  - {id: R1, title: X, text: The tool SHALL work., serves: [N9.1], status: done}\n",
 	}))
 	want := "c.shall.yaml:3: error: R1 status: \"done\" is not one of draft, approved, implemented, verified, waived\n1 errors, 0 warnings\n"
 	if out != want {
@@ -156,7 +159,7 @@ func TestWarningsFailOnlyWhenAsked(t *testing.T) {
 	dir := testfile.Write(t, map[string]string{
 		"shall.yaml":         manifest,
 		"mission.shall.yaml": mission,
-		"c.shall.yaml":       "title: C\nrequirements:\n  - {id: R1, title: X, text: Tool SHALL work., serves: [N1], status: draft}\n",
+		"c.shall.yaml":       "title: C\nitems:\n  - {id: R1, title: X, text: Tool SHALL work., serves: [N9.1], status: draft}\n",
 	})
 	if code, out := shall(t, "check", dir); code != 0 || !strings.Contains(out, "0 errors, 1 warnings") {
 		t.Fatalf("exit %d, output %q; want a pass with one warning", code, out)
@@ -355,7 +358,7 @@ func TestOneHookToAdopt(t *testing.T) {
 	if out, err := in(preCommit, "try-repo", repo, "shall-check", "--all-files"); err != nil {
 		t.Fatalf("the hook failed on a valid set: %v\n%s", err, out)
 	}
-	testfile.WriteFile(t, filepath.Join(dir, "c.shall.yaml"), "title: C\nrequirements:\n  - {id: R1, title: A, text: no promise, serves: [N1], status: draft}\n")
+	testfile.WriteFile(t, filepath.Join(dir, "c.shall.yaml"), "title: C\nitems:\n  - {id: R1, title: A, text: no promise, serves: [N9.1], status: draft}\n")
 	if out, err := in(git, "add", "."); err != nil {
 		t.Fatal(err, out)
 	}
@@ -369,11 +372,11 @@ func TestDiffExitStatus(t *testing.T) {
 	t.Attr("verifies", "R37.5")
 	t.Attr("verifies", "R37.6")
 	dir := testfile.Repo(t)
-	testfile.Commit(t, dir, map[string]string{"shall.yaml": manifest, "mission.shall.yaml": mission, "doc/a.shall.yaml": "title: A\nrequirements: []\n"})
+	testfile.Commit(t, dir, map[string]string{"shall.yaml": manifest, "mission.shall.yaml": mission, "doc/a.shall.yaml": "title: A\nitems: []\n"})
 	if code, out := shall(t, "diff", dir); code != 0 || out != "nothing changed\n" {
 		t.Errorf("diff with nothing changed = exit %d %q, want 0 and that nothing changed", code, out)
 	}
-	testfile.WriteFile(t, filepath.Join(dir, "c.shall.yaml"), "title: C\nrequirements:\n  - {id: R1, title: One, text: The tool SHALL work., serves: [N1], status: draft}\n")
+	testfile.WriteFile(t, filepath.Join(dir, "c.shall.yaml"), "title: C\nitems:\n  - {id: R1, title: One, text: The tool SHALL work., serves: [N9.1], status: draft}\n")
 	if code, out := shall(t, "diff", dir); code != 1 || !strings.Contains(out, "R1 One: added") {
 		t.Errorf("diff with a new requirement = exit %d %q, want 1 and R1 added", code, out)
 	}

@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -40,21 +41,22 @@ func TestMain(m *testing.M) {
 // statuses.
 func pageSet() map[string]string {
 	var m strings.Builder
-	m.WriteString("mission: A product with enough requirements to scroll through.\nobjectives:\n")
+	m.WriteString("title: Mission\nmission: A product with enough requirements to scroll through.\nitems:\n")
 	for i := 1; i <= 4; i++ {
-		fmt.Fprintf(&m, "  - {id: O%d, title: Objective %d, text: The product reaches objective %d and keeps it for as long as anyone needs it to., measure: how far objective %d is reached}\n", i, i, i, i)
+		fmt.Fprintf(&m, "  - {id: O%d, title: Objective %d, text: The product reaches objective %d and keeps it for as long as anyone needs it to., measure: how far objective %d is reached}\n", 60+i, i, i, i)
 	}
-	m.WriteString("stakeholders:\n  - {id: S1, title: User, text: Uses the product every day.}\n  - {id: S2, title: Owner, text: Pays for the product.}\nneeds:\n")
+	m.WriteString("  - id: S65\n    title: User\n    text: Uses the product every day.\n    children:\n")
 	for i := 1; i <= 6; i++ {
-		notes := ""
+		more := ""
 		if i == 1 {
-			notes = ", notes: [Heard in the field.]"
+			more = ", stakeholders: [S66], notes: [Heard in the field.]"
 		}
-		fmt.Fprintf(&m, "  - {id: N%d, title: Need %d, stakeholder: S1, text: The user needs thing %d to work without having to think about it at all., serves: [O1], status: validated%s}\n", i, i, i, notes)
+		fmt.Fprintf(&m, "      - {id: N65.%d, title: Need %d, text: The user needs thing %d to work without having to think about it at all., serves: [O61], status: validated%s}\n", i, i, i, more)
 	}
+	m.WriteString("  - {id: S66, title: Owner, text: Pays for the product.}\n")
 	chapter := func(title, word string, first int, status string, extra func(id int) string) string {
 		var c strings.Builder
-		fmt.Fprintf(&c, "title: %s\nrequirements:\n", title)
+		fmt.Fprintf(&c, "title: %s\nitems:\n", title)
 		for id := first; id < first+12; id++ {
 			fmt.Fprintf(&c, "  - id: R%d\n    title: %s %d\n    text: When %s %d happens, the product SHALL answer %s %d in a way that takes a line or two to describe.\n",
 				id, title, id, word, id, word, id)
@@ -69,7 +71,7 @@ func pageSet() map[string]string {
 		"a-alpha.shall.yaml": chapter("Alpha", "alpha", 1, "implemented", func(id int) string {
 			switch id {
 			case 1:
-				return "    serves: [N2]\n    rationale: Alpha one has its reasons.\n    notes: [An alpha note.]\n" +
+				return "    serves: [N65.2]\n    rationale: Alpha one has its reasons.\n    notes: [An alpha note.]\n" +
 					"    links:\n      - {url: \"https://example.com/evidence\", title: Evidence}\n" +
 					"    children:\n      - {id: R1.1, title: Alpha child, text: The product SHALL do the first part., status: implemented}\n"
 			case 2:
@@ -77,14 +79,14 @@ func pageSet() map[string]string {
 			case 11:
 				return "    serves: [R13]\n"
 			}
-			return fmt.Sprintf("    serves: [N%d]\n", id%6+1)
+			return fmt.Sprintf("    serves: [N65.%d]\n", id%6+1)
 		}) + "retired:\n  - {id: R13, title: Old Alpha}\n",
 		"b-beta.shall.yaml": chapter("Beta", "beta", 20, "approved", func(id int) string {
 			if id == 20 {
-				return "    serves: [N1]\n    children:\n      - {id: R20.1, title: Beta child, text: The product SHALL do the approved part., status: approved}\n" +
+				return "    serves: [N65.1]\n    children:\n      - {id: R20.1, title: Beta child, text: The product SHALL do the approved part., status: approved}\n" +
 					"      - {id: R20.2, title: Beta draft, text: The product SHALL do the draft part., status: draft}\n"
 			}
-			return "    serves: [N1]\n"
+			return "    serves: [N65.1]\n"
 		}),
 		"c-gamma.shall.yaml": chapter("Gamma", "gamma", 40, "draft", func(id int) string {
 			switch id {
@@ -93,7 +95,7 @@ func pageSet() map[string]string {
 			case 51:
 				return ""
 			}
-			return "    serves: [N3]\n"
+			return "    serves: [N65.3]\n"
 		}),
 	}
 }
@@ -107,6 +109,9 @@ type page struct {
 	root string
 	// stop stops the server; the tab stays open.
 	stop func()
+	// expected are fragments of the problems the test expects the page to
+	// have, each of which it must have.
+	expected []string
 }
 
 // openPage serves the files under a new directory and opens path there in a
@@ -148,8 +153,23 @@ func (g *page) tab() *chrome.Page {
 		g.t.Fatal(err)
 	}
 	g.t.Cleanup(func() {
-		if probs := p.Problems(); len(probs) > 0 {
+		var probs []string
+		seen := map[string]bool{}
+		for _, problem := range p.Problems() {
+			i := slices.IndexFunc(g.expected, func(e string) bool { return strings.Contains(problem, e) })
+			if i < 0 {
+				probs = append(probs, problem)
+			} else {
+				seen[g.expected[i]] = true
+			}
+		}
+		if len(probs) > 0 {
 			g.t.Errorf("the page had script errors: %v", probs)
+		}
+		for _, e := range g.expected {
+			if !seen[e] {
+				g.t.Errorf("the page had no problem holding %q, want it refused so", e)
+			}
 		}
 		p.Close()
 	})
@@ -352,7 +372,7 @@ func TestPageStatusesShown(t *testing.T) {
 	if got, want := g.str(`document.querySelector('#R21 > .head .status')?.textContent`), "approved"; got != want {
 		t.Errorf("R21's status = %q, want %q", got, want)
 	}
-	if got, want := g.str(`document.querySelector('#N1 > .head .status')?.textContent`), "validated"; got != want {
+	if got, want := g.str(`document.querySelector('[id="N65.1"] > .head .status')?.textContent`), "validated"; got != want {
 		t.Errorf("N1's status = %q, want %q", got, want)
 	}
 }
@@ -361,7 +381,7 @@ func TestPageFollowsALinkIntoAFoldedChapter(t *testing.T) {
 	t.Attr("verifies", "R26.6")
 	t.Attr("verifies", "R27.3")
 	g := openPage(t, pageSet(), "/demo/")
-	g.click(`#N2 a[data-item="R1"]`)
+	g.click(`[id="N65.2"] a[data-item="R1"]`)
 	g.expect(`!!document.getElementById('R1')`, "following a link unfolds the chapter")
 	g.expect(`location.pathname === '/demo/R1'`, "the address becomes the item's")
 	g.expect(`document.getElementById('R1').classList.contains('target') && Math.abs(document.getElementById('R1').getBoundingClientRect().top) < 80`, "the item is marked and at the top")
@@ -423,7 +443,7 @@ func TestPageFindsByIdAndWords(t *testing.T) {
 func TestPagePreviews(t *testing.T) {
 	t.Attr("verifies", "R27.1")
 	g := openPage(t, pageSet(), "/demo/")
-	link := `document.querySelector('#N2 a[data-preview][data-item="R1"]')`
+	link := `document.querySelector('[id="N65.2"] a[data-preview][data-item="R1"]')`
 	g.do(link + `.dispatchEvent(new MouseEvent('mouseover', {bubbles: true}))`)
 	g.expect(`!document.getElementById('preview').hidden && document.getElementById('preview').textContent.includes('When alpha 1 happens')`, "pointing at a link shows a preview")
 	g.do(`document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}))`)
@@ -469,8 +489,8 @@ func TestPageTitlesBesideIds(t *testing.T) {
 	if got, want := g.str(`getComputedStyle(document.querySelector('#R1 > .serves .ref-title')).color`), g.colour("var(--muted)"); got != want {
 		t.Errorf("the title's colour = %s, want the grey %s", got, want)
 	}
-	if got, want := g.str(`document.querySelector('#N1 dd .ref-title')?.textContent`), "User"; got != want {
-		t.Errorf("the title beside the stakeholder = %q, want %q", got, want)
+	if got, want := g.str(`document.querySelector('[id="N65.1"] dd .ref-title')?.textContent`), "Owner"; got != want {
+		t.Errorf("the title beside the stakeholder class = %q, want %q", got, want)
 	}
 }
 
@@ -525,7 +545,7 @@ func TestPageFollowsTheFiles(t *testing.T) {
 	}
 	g.eval(`(() => { const e = [...document.querySelectorAll('main [data-anchor]')].find((el) => el.getBoundingClientRect().top >= 0); return {id: e.id, top: e.getBoundingClientRect().top}; })()`, &place)
 	before := g.version()
-	added := strings.Replace(src, "  - id: R1\n", "  - id: R60\n    title: Inserted\n    text: The product SHALL show this.\n    serves: [N1]\n    status: draft\n    notes: [one, two, three]\n  - id: R1\n", 1)
+	added := strings.Replace(src, "  - id: R1\n", "  - id: R60\n    title: Inserted\n    text: The product SHALL show this.\n    serves: [N65.1]\n    status: draft\n    notes: [one, two, three]\n  - id: R1\n", 1)
 	saved := time.Now()
 	g.save("a-alpha.shall.yaml", added)
 	if err := g.p.Until(fmt.Sprintf(`state.version !== %q && !!document.getElementById('R60')`, before), 2*time.Second); err != nil {
@@ -579,8 +599,11 @@ func TestPageOutline(t *testing.T) {
 	if got, want := g.str(`[...document.querySelectorAll('#outline-menu > ul > li > a')].map((a) => a.textContent).join('|')`), "Mission|Alpha|Beta|Gamma"; got != want {
 		t.Errorf("the outline = %q, want %q", got, want)
 	}
-	if g.is(`document.querySelector('#outline-menu a[data-item]')`) {
+	if g.is(`document.querySelector('#outline-menu a[data-item]:not([data-chapter="mission.shall.yaml"])')`) {
 		t.Error("the outline lists items of folded chapters")
+	}
+	if !g.is(`document.querySelector('#outline-menu a[data-item="S65"]')`) {
+		t.Error("the outline does not list the mission file's items")
 	}
 	g.click(`#outline-menu a[data-path="b-beta.shall.yaml"]`)
 	g.expect(`!!document.getElementById('R20')`, "an outline entry unfolds its chapter")
@@ -590,7 +613,7 @@ func TestPageOutline(t *testing.T) {
 	g.click(`#outline-menu a[data-item="R25"]`)
 	g.expect(`location.pathname === '/demo/R25'`, "an outline item goes to its item")
 	g.expect(`document.querySelector('#outline-menu li.pure-menu-selected > ul > li.pure-menu-selected > a')?.dataset.item === 'R25'`, "the outline marks the item the reader is in")
-	g.click(`#outline-menu a[data-scroll="file:mission.shall.yaml:Needs"]`)
+	g.click(`#outline-menu a[data-item="S65"]`)
 	g.expect(`document.querySelector('#outline-menu > ul > li.pure-menu-selected')?.dataset.for === 'file:mission.shall.yaml'`, "the mark follows the reader")
 }
 
@@ -744,7 +767,7 @@ func TestPageUsesOnlyTheAPI(t *testing.T) {
 	g := openPage(t, pageSet(), "/demo/")
 	g.click(`#outline-menu a[data-path="b-beta.shall.yaml"]`)
 	g.expect(`!!document.getElementById('R20')`, "a chapter unfolds")
-	g.do(`document.querySelector('#N2 a[data-preview][data-item="R1"]').dispatchEvent(new MouseEvent('mouseover', {bubbles: true}))`)
+	g.do(`document.querySelector('[id="N65.2"] a[data-preview][data-item="R1"]').dispatchEvent(new MouseEvent('mouseover', {bubbles: true}))`)
 	g.expect(`!document.getElementById('preview').hidden`, "a preview shows")
 	g.find("gamma 45")
 	g.expect(`location.pathname === '/demo/R45'`, "a search goes")
@@ -778,6 +801,8 @@ func TestPageUsesOnlyTheAPI(t *testing.T) {
 func TestPageWhenTheServerGoes(t *testing.T) {
 	g := openPage(t, pageSet(), "/demo/")
 	g.stop()
+	// With the server gone, the browser logs the requests it cannot make.
+	g.expected = append(g.expected, "net::ERR_CONNECTION_REFUSED")
 	g.do(sel("c-gamma.shall.yaml") + `.querySelector('button.fold').click()`)
 	g.expect(sel("c-gamma.shall.yaml")+`.hasAttribute('data-failed')`, "a chapter that cannot be fetched is marked")
 	if !g.is(sel("c-gamma.shall.yaml") + `.dataset.open === 'false'`) {
@@ -786,5 +811,79 @@ func TestPageWhenTheServerGoes(t *testing.T) {
 	g.find("R20")
 	if !g.is(`location.pathname === '/demo/'`) {
 		t.Error("a search with no server moved the page")
+	}
+}
+
+func TestPageTopics(t *testing.T) {
+	t.Attr("verifies", "R26.11.1")
+	t.Attr("verifies", "R26.17")
+	set := map[string]string{
+		"shall.yaml":         "name: demo\nformat: 1\n",
+		"mission.shall.yaml": "title: Mission\nmission: m\nitems:\n  - {id: O1, title: O, text: t, measure: m}\n  - id: S2\n    title: S\n    text: t\n    children:\n      - {id: N2.1, title: N, text: t, serves: [O1], status: hypothesis}\n",
+		"a.shall.yaml": "title: Alpha\nitems:\n  - id: T3\n    title: Water\n    text: The tank holds water.\n    children:\n" +
+			"      - {id: R3.1, title: Lamp, text: The machine SHALL light the lamp., serves: [N2.1], status: draft}\n" +
+			"      - {id: T3.2, title: Levels, children: [{id: R3.2.1, title: Low, text: The machine SHALL warn., serves: [N2.1], status: verified}]}\n",
+	}
+	g := openPage(t, set, "/demo/T3")
+	g.expect(`!!document.querySelector('#outline-menu a[data-item="T3"] + ul a[data-item="T3.2"]')`, "the outline lists a topic's topics under it")
+	if g.is(`document.querySelector('#outline-menu a[data-item="R3.1"]')`) {
+		t.Error("the outline lists a requirement under a topic, want only the topics there")
+	}
+	topic := `document.getElementById('T3')`
+	if got, want := g.str(topic+`.querySelector(':scope > .head .counts')?.textContent`), "2 requirements · 1 draft · 1 verified"; got != want {
+		t.Errorf("T3's counts = %q, want %q", got, want)
+	}
+	if got, want := g.str(topic+`.querySelector(':scope > .text')?.textContent`), "The tank holds water."; got != want {
+		t.Errorf("T3's text = %q, want %q", got, want)
+	}
+	if g.is(topic + `.querySelector(':scope > .head .status')`) {
+		t.Error("a topic shows a status, want none")
+	}
+}
+
+func TestPageDrawsATopic(t *testing.T) {
+	t.Attr("verifies", "R26.16")
+	t.Attr("verifies", "R44.1")
+	text := "    text: |\n" +
+		"      ## States\n\n" +
+		"      | State | Means |\n      |:--|--:|\n      | empty | refill |\n\n" +
+		"      - one\n      - two\n\n" +
+		"      ![a lamp](https://example.com/lamp.png)\n\n" +
+		"      <div onclick=\"x()\">hi</div>\n\n      A <b>bold</b> claim.\n\n" +
+		"      ```mermaid\n      stateDiagram-v2\n        Full --> Empty: a brew\n        Empty --> Full: refill\n      ```\n\n" +
+		"      ```mermaid\n      flowchart LR\n        A[\"<img src=x onerror=window.pwned=1>\"] --> B\n      ```\n\n" +
+		"      ```mermaid\n      not a diagram at all\n      ```\n"
+	set := map[string]string{
+		"shall.yaml":         "name: demo\nformat: 1\n",
+		"mission.shall.yaml": "title: Mission\nmission: m\n",
+		"a.shall.yaml":       "title: Alpha\nitems:\n  - id: T1\n    title: Water\n" + text,
+	}
+	g := openPage(t, set, "/demo/T1")
+	// The handler a label slips in reaches the page only to be refused.
+	g.expected = append(g.expected, "Executing inline event handler violates the following Content Security Policy")
+	topic := `document.getElementById('T1')`
+	g.expect(topic+`.querySelectorAll('figure.diagram[data-drawn]').length === 3`, "every diagram drawn, or found wrong")
+	for _, c := range []struct{ expr, want string }{
+		{topic + `.querySelector('.md-heading').textContent`, "States"},
+		{topic + `.querySelector('table th.align-left').textContent + '/' + ` + topic + `.querySelector('table td.align-right').textContent`, "State/refill"},
+		{topic + `.querySelectorAll('.text li').length`, "2"},
+		{topic + `.querySelector('.text a[href="https://example.com/lamp.png"]').textContent`, "a lamp"},
+		{`String(` + topic + `.querySelectorAll('.text img').length)`, "0"},
+		{topic + `.querySelector('pre.html').textContent`, "<div onclick=\"x()\">hi</div>\n"},
+		{topic + `.querySelectorAll('.text b, .text div[onclick]').length`, "0"},
+		{`String(document.querySelectorAll('figure.diagram[data-drawn="true"] svg').length)`, "2"},
+		{topic + `.querySelector('figure.diagram[data-drawn="false"] .finding').textContent.startsWith('error · the diagram cannot be drawn')`, "true"},
+		{`String(window.pwned)`, "undefined"},
+		{`String(document.querySelectorAll('figure.diagram img, figure.diagram foreignObject').length)`, "0"},
+	} {
+		if got := g.str(`String(` + c.expr + `)`); got != c.want {
+			t.Errorf("%s = %q, want %q", c.expr, got, c.want)
+		}
+	}
+	if got := g.str(`window.mermaid.mermaidAPI.getConfig().securityLevel`); got != "strict" {
+		t.Errorf("Mermaid's security level = %q, want strict", got)
+	}
+	if fill := g.str(`getComputedStyle(document.querySelector('figure.diagram[data-drawn="true"] svg rect')).fill`); fill == "rgb(0, 0, 0)" {
+		t.Errorf("a state's fill = %s, want the drawing's own styles applied", fill)
 	}
 }

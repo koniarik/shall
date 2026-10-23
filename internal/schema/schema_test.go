@@ -73,20 +73,37 @@ func TestLoadsTheFormatSchema(t *testing.T) {
 func TestValidFilesHaveNoFindings(t *testing.T) {
 	t.Attr("verifies", "R21")
 	got := check(t, "chapter.schema.json", `title: T
-requirements:
-  - id: R1
-    title: A
-    text: The tool SHALL work.
-    serves: [N1, R2, company/R4]
-    status: approved
-    links:
-      - url: https://example.com/run/1
-      - url: file:///tmp/evidence.pdf
-      - url: urn:isbn:0451450523
+items:
+  - id: T1
+    title: Terms
+    text: |
+      A *brew* is one cup.
     children:
       - id: R1.1
-        title: B
-        text: The tool SHALL work too.
+        title: A
+        text: The tool SHALL work.
+        serves: [N2.1, R3, company/R4]
+        status: approved
+        links:
+          - url: https://example.com/run/1
+          - url: file:///tmp/evidence.pdf
+          - url: urn:isbn:0451450523
+        children:
+          - id: R1.1.1
+            title: B
+            text: The tool SHALL work too.
+      - id: T1.2
+        title: A Heading
+  - id: S2
+    title: C
+    text: t
+    children:
+      - id: N2.1
+        title: D
+        text: t
+        stakeholders: [S5]
+        serves: [O4, mission]
+        status: hypothesis
 `)
 	if len(got) != 0 {
 		t.Fatalf("findings = %+v, want none", got)
@@ -97,7 +114,7 @@ func TestReportsShapeErrorsWhereTheyAre(t *testing.T) {
 	t.Attr("verifies", "R21")
 	t.Attr("verifies", "R3")
 	got := check(t, "chapter.schema.json", `title: T
-requirements:
+items:
   - id: R1
     title: A
     text: The tool SHALL work.
@@ -109,29 +126,42 @@ requirements:
     children:
       - id: R1.1
         text: x
+  - id: T2
+    title: B
+    notes: [a]
+  - id: X3
+    title: C
 `)
 	expect(t, got, 6, "R1", "status", "is not one of draft, approved")
 	expect(t, got, 7, "R1", "colour", "is not defined")
 	expect(t, got, 8, "R1", "serves", `"O1" is not valid`)
 	expect(t, got, 10, "R1", "url", "is not a URI")
 	expect(t, got, 12, "R1.1", "title", "is missing")
+	expect(t, got, 16, "T2", "notes", "is not defined")
+	expect(t, got, 17, "X3", "id", "is not a valid value")
 }
 
 func TestChecksTheMissionFile(t *testing.T) {
 	t.Attr("verifies", "R21")
 	got := check(t, "mission.schema.json", `ranking: [N1]
-needs:
-  - id: N01
+items:
+  - id: S1
     title: A
     text: t
-    stakeholder: S1
-    serves: []
+    children:
+      - id: N01
+        title: A
+        text: t
+        stakeholder: S1
+        serves: []
 `)
+	expect(t, got, 1, "", "title", "is missing")
 	expect(t, got, 1, "", "mission", "is missing")
 	expect(t, got, 1, "", "ranking", `"N1" is not a valid value`)
-	expect(t, got, 3, "N01", "id", "is not a valid value")
-	expect(t, got, 3, "N01", "status", "is missing")
-	expect(t, got, 7, "N01", "serves", "needs at least 1 entries")
+	expect(t, got, 7, "N01", "id", "is not a valid value")
+	expect(t, got, 7, "N01", "status", "is missing")
+	expect(t, got, 10, "N01", "stakeholder", "is not defined")
+	expect(t, got, 11, "N01", "serves", "needs at least 1 entries")
 }
 
 func TestChecksTheManifest(t *testing.T) {
@@ -226,6 +256,23 @@ func TestConstantsLengthsAndNestedFields(t *testing.T) {
 	expect(t, got, 1, "", "c", `field "c" must be 1, not 2`)
 	expect(t, got, 2, "", "n", `field "n" needs at least 3 characters`)
 	expect(t, got, 5, "", "z", `field "z" is not defined here`)
+}
+
+func TestIfThenElse(t *testing.T) {
+	t.Attr("verifies", "R21")
+	schema := `{"type": "object", "properties": {"items": {"type": "array", "items": {
+		"type": "object",
+		"if": {"required": ["id"], "properties": {"id": {"type": "string", "pattern": "^A"}}},
+		"then": {"required": ["a"]},
+		"else": {"required": ["b"]}}}}}`
+	got := own(t, schema, "items:\n  - id: A1\n    a: x\n  - id: B1\n    b: x\n  - id: A2\n  - id: 7\n")
+	if len(got) != 2 {
+		t.Errorf("findings = %+v, want two", got)
+	}
+	expect(t, got, 6, "A2", "a", `field "a" is missing`)
+	expect(t, got, 7, "", "b", `field "b" is missing`)
+	refused(t, `{"if": 1}`)
+	refused(t, `{"then": {"maxItems": 1}}`)
 }
 
 func TestCheckingAgainstASchemaNotLoadedPanics(t *testing.T) {

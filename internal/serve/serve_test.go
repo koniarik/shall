@@ -20,22 +20,25 @@ import (
 	"shall/internal/testfile"
 )
 
-const mission = `mission: Coffee without anyone looking after the machine.
-ranking: [O1]
-objectives:
-  - {id: O1, title: No Dry Brews, text: No brew starts dry., measure: dry brews}
-stakeholders:
-  - {id: S1, title: Office User, text: Wants coffee.}
-needs:
-  - {id: N1, title: Know Before Brewing, stakeholder: S1, text: Know the tank is empty., serves: [O1], status: validated, notes: [Heard twice.]}
+const mission = `title: Why Coffee
+mission: Coffee without anyone looking after the machine.
+ranking: [O90]
+items:
+  - {id: O90, title: No Dry Brews, text: No brew starts dry., measure: dry brews}
+  - id: S91
+    title: Office User
+    text: Wants coffee.
+    children:
+      - {id: N91.1, title: Know Before Brewing, stakeholders: [S92], text: Know the tank is empty., serves: [O90], status: validated, notes: [Heard twice.]}
+  - {id: S92, title: Facilities, text: Keeps the machine running.}
 `
 
 const tank = `title: Water Tank
-requirements:
+items:
   - id: R1
     title: Refill Lamp
     text: When the tank becomes empty, the machine SHALL light the refill lamp.
-    serves: [N1]
+    serves: [N91.1]
     status: verified
     children:
       - {id: R1.1, title: Lamp Seen, text: The machine SHALL show the lamp., status: implemented}
@@ -51,8 +54,8 @@ retired:
 `
 
 const brew = `title: Brewing
-requirements:
-  - {id: R4, title: Brew Button, text: When pressed the machine SHALL brew., serves: [N1], status: draft, rationale: One press is all it takes., notes: [Seen in the trial.], links: [{url: "https://ci.example.com/runs/1", title: Trial run}]}
+items:
+  - {id: R4, title: Brew Button, text: When pressed the machine SHALL brew., serves: [N91.1], status: draft, rationale: One press is all it takes., notes: [Seen in the trial.], links: [{url: "https://ci.example.com/runs/1", title: Trial run}]}
   - {id: R5, title: Brew Lock, text: While brewing the machine SHALL lock the lid., serves: [R4], status: draft}
 `
 
@@ -288,19 +291,21 @@ func TestOneDocumentInOrder(t *testing.T) {
 		t.Errorf("files = %s, want the mission file, then a-brew and b-tank", got)
 	}
 	m := a.Files[0]
-	if m.Mission != "Coffee without anyone looking after the machine." || ids(m.Objectives) != "O1" || ids(m.Stakeholders) != "S1" || ids(m.Needs) != "N1" {
-		t.Errorf("mission = %+v, want its statement and O1, S1 and N1", m)
+	if m.Mission != "Coffee without anyone looking after the machine." || m.Title != "Why Coffee" || ids(m.Items) != "O90 S91 S92" || ids(m.Items[1].Children) != "N91.1" {
+		t.Errorf("mission = %+v, want its title and statement, and O90, S91 holding N91.1, and S92", m)
 	}
 	tank := file(t, root, "b-tank.shall.yaml")
-	if ids(tank.Requirements) != "R1 R2" || ids(tank.Requirements[0].Children) != "R1.1" {
-		t.Errorf("chapter = %s, children %s; want R1 R2, and R1.1 under R1", ids(tank.Requirements), ids(tank.Requirements[0].Children))
+	if ids(tank.Items) != "R1 R2" || ids(tank.Items[0].Children) != "R1.1" {
+		t.Errorf("chapter = %s, children %s; want R1 R2, and R1.1 under R1", ids(tank.Items), ids(tank.Items[0].Children))
 	}
 }
 
 func TestFilteredByStatus(t *testing.T) {
 	t.Attr("verifies", "R26.15")
 	root := testfile.Write(t, with(coffee(), map[string]string{
-		"c-mixed.shall.yaml": "title: Mixed\nrequirements:\n  - id: R6\n    title: A\n    text: The machine SHALL hum.\n    serves: [N1]\n    status: approved\n    children:\n      - {id: R6.1, title: B, text: The machine SHALL hum low., status: approved}\n      - {id: R6.2, title: C, text: The machine SHALL hum softly., status: draft}\n",
+		"c-mixed.shall.yaml": "title: Mixed\nitems:\n  - id: R6\n    title: A\n    text: The machine SHALL hum.\n    serves: [N91.1]\n    status: approved\n    children:\n      - {id: R6.1, title: B, text: The machine SHALL hum low., status: approved}\n      - {id: R6.2, title: C, text: The machine SHALL hum softly., status: draft}\n" +
+			"  - id: T7\n    title: Noise\n    children:\n      - {id: R7.1, title: D, text: The machine SHALL purr., serves: [N91.1], status: approved}\n      - {id: R7.2, title: E, text: The machine SHALL whirr., serves: [N91.1], status: draft}\n" +
+			"  - {id: T8, title: Terms, text: A hum is a low sound.}\n",
 	}))
 	var shape func([]*itemJSON) string
 	shape = func(items []*itemJSON) string {
@@ -322,25 +327,44 @@ func TestFilteredByStatus(t *testing.T) {
 		{"b-tank.shall.yaml?status=implemented", "R1[R1.1]"},
 		{"b-tank.shall.yaml?status=approved&status=implemented", "R1[R1.1] R2"},
 		{"b-tank.shall.yaml?status=draft", ""},
-		{"c-mixed.shall.yaml?status=approved", "R6(context)[R6.1]"},
-		{"c-mixed.shall.yaml?status=draft", "R6[R6.2]"},
-		{"c-mixed.shall.yaml", "R6[R6.1 R6.2]"},
+		{"c-mixed.shall.yaml?status=approved", "R6(context)[R6.1] T7(context)[R7.1]"},
+		{"c-mixed.shall.yaml?status=draft", "R6[R6.2] T7(context)[R7.2]"},
+		{"c-mixed.shall.yaml", "R6[R6.1 R6.2] T7[R7.1 R7.2] T8"},
 	} {
 		a := fileAnswer{fileJSON: &fileJSON{}}
 		answer(t, root, "/api/sets/coffee/files/"+c.path, http.StatusOK, &a)
-		if got := shape(a.Requirements); got != c.want {
+		if got := shape(a.Items); got != c.want {
 			t.Errorf("%s = %q, want %q", c.path, got, c.want)
 		}
 	}
-	if a := setOf(t, root); a.Requirements != (statusCounts{Total: 8, Draft: 4, Approved: 2, Implemented: 2}) {
-		t.Errorf("set requirements = %+v, want 8: 4 draft, 2 approved, 2 implemented", a.Requirements)
+	if a := setOf(t, root); a.Requirements != (statusCounts{Total: 10, Draft: 5, Approved: 3, Implemented: 2}) {
+		t.Errorf("set requirements = %+v, want 10: 5 draft, 3 approved, 2 implemented", a.Requirements)
+	}
+}
+
+func TestProgressPerTopic(t *testing.T) {
+	t.Attr("verifies", "R26.17")
+	root := testfile.Write(t, with(coffee(), map[string]string{
+		"c-noise.shall.yaml": "title: Noise\nitems:\n  - id: T6\n    title: Noise\n    children:\n" +
+			"      - {id: R6.1, title: A, text: The machine SHALL purr., serves: [N91.1], status: approved, children: [{id: R6.1.1, title: B, text: The machine SHALL purr low., status: draft}]}\n" +
+			"      - {id: T6.2, title: Deeper, children: [{id: R6.2.1, title: C, text: The machine SHALL whirr., serves: [N91.1], status: verified}]}\n" +
+			"  - {id: T7, title: Terms, text: A purr is a low sound.}\n",
+	}))
+	if got, want := item(t, root, "T6").Requirements, (statusCounts{Total: 3, Draft: 2, Verified: 1}); got == nil || *got != want {
+		t.Errorf("T6's requirements = %+v, want %+v: every requirement below it, by effective status", got, want)
+	}
+	if got := item(t, root, "T7").Requirements; got == nil || got.Total != 0 {
+		t.Errorf("T7's requirements = %+v, want none counted", got)
+	}
+	if r := item(t, root, "R6.1"); r.Requirements != nil || r.EffectiveStatus != "draft" {
+		t.Errorf("R6.1 = %+v, want no count of its own and the effective status draft", r)
 	}
 }
 
 func TestStatementsShown(t *testing.T) {
 	t.Attr("verifies", "R26.1")
 	root := testfile.Write(t, coffee())
-	r4 := file(t, root, "a-brew.shall.yaml").Requirements[0]
+	r4 := file(t, root, "a-brew.shall.yaml").Items[0]
 	if r4.ID != "R4" || r4.Title != "Brew Button" || r4.Text != "When pressed the machine SHALL brew." {
 		t.Errorf("R4 = %+v, want its id, title Brew Button and its text", r4)
 	}
@@ -357,7 +381,7 @@ func TestChaptersComeWithoutTheirItems(t *testing.T) {
 	if brew.Title != "Brewing" || brew.Counts != wantBrew || tank.Counts != wantTank {
 		t.Errorf("chapters = %+v, %+v; want Brewing counting %+v and Water Tank %+v", brew, tank, wantBrew, wantTank)
 	}
-	if brew.Requirements != nil || tank.Requirements != nil {
+	if brew.Items != nil || tank.Items != nil {
 		t.Error("the set's answer holds a chapter's items")
 	}
 }
@@ -377,8 +401,8 @@ func TestStatusesShown(t *testing.T) {
 	if r1.Status != "verified" || r1.EffectiveStatus != "implemented" || r2.Status != "approved" || r2.EffectiveStatus != "approved" {
 		t.Errorf("R1 %s/%s, R2 %s/%s; want verified/implemented and approved/approved", r1.Status, r1.EffectiveStatus, r2.Status, r2.EffectiveStatus)
 	}
-	if n1 := item(t, root, "N1"); n1.Status != "validated" || n1.EffectiveStatus != "" {
-		t.Errorf("N1 %s/%s, want validated and no effective status", n1.Status, n1.EffectiveStatus)
+	if n1 := item(t, root, "N91.1"); n1.Status != "validated" || n1.EffectiveStatus != "" {
+		t.Errorf("N91.1 %s/%s, want validated and no effective status", n1.Status, n1.EffectiveStatus)
 	}
 }
 
@@ -414,8 +438,8 @@ func TestIdsAreResolved(t *testing.T) {
 			t.Errorf("serves[%d] = %+v, want %+v", i, got[i], want[i])
 		}
 	}
-	if s := item(t, root, "N1").Stakeholder; s == nil || *s != (refJSON{ID: "S1", State: "item", Set: "coffee", Title: "Office User", File: "mission.shall.yaml"}) {
-		t.Errorf("stakeholder = %+v, want S1 Office User", s)
+	if s := item(t, root, "N91.1").Stakeholders; len(s) != 1 || s[0] != (refJSON{ID: "S92", State: "item", Set: "coffee", Title: "Facilities", File: "mission.shall.yaml"}) {
+		t.Errorf("stakeholders = %+v, want S92 Facilities", s)
 	}
 }
 
@@ -426,10 +450,10 @@ func TestIdsOfAnotherServedSetAreResolved(t *testing.T) {
 		"std/shall.yaml":             "name: standard\nformat: 1\n",
 		"std/mission.shall.yaml":     mission,
 		"product/shall.yaml":         "name: coffee\nformat: 1\ndepends:\n  company:\n    path: std\n",
-		"product/mission.shall.yaml": "mission: m\nstakeholders:\n  - {id: S1, title: A, text: t}\nneeds:\n  - {id: N1, title: A, text: t, stakeholder: S1, serves: [mission], status: hypothesis, mirrors: company/N1}\n",
+		"product/mission.shall.yaml": "title: M\nmission: m\nitems:\n  - id: S91\n    title: A\n    text: t\n    children:\n      - {id: N91.1, title: A, text: t, serves: [mission], status: hypothesis, mirrors: company/N91.1}\n",
 	})
-	n1 := item(t, root, "N1")
-	want := refJSON{ID: "company/N1", State: "item", Set: "standard", ItemID: "N1", Title: "Know Before Brewing", File: "std/mission.shall.yaml"}
+	n1 := item(t, root, "N91.1")
+	want := refJSON{ID: "company/N91.1", State: "item", Set: "standard", ItemID: "N91.1", Title: "Know Before Brewing", File: "std/mission.shall.yaml"}
 	if n1.Mirrors == nil || *n1.Mirrors != want {
 		t.Errorf("mirrors = %+v, want %+v", n1.Mirrors, want)
 	}
@@ -451,7 +475,7 @@ func TestBacklinks(t *testing.T) {
 	t.Attr("verifies", "R27.2.1")
 	root := testfile.Write(t, coffee())
 	var got []string
-	for _, n := range item(t, root, "N1").NamedBy {
+	for _, n := range item(t, root, "N91.1").NamedBy {
 		got = append(got, n.Field+":"+n.ID+":"+n.Title)
 	}
 	if strings.Join(got, " ") != "serves:R4:Brew Button serves:R1:Refill Lamp" {
@@ -472,11 +496,11 @@ func TestJumpToAnId(t *testing.T) {
 	}{
 		{"R1.1", "item", "coffee", "", ""},
 		{" r4 ", "item", "coffee", "R4", ""},
-		{"tea/N1", "item", "tea", "N1", ""},
+		{"tea/N91.1", "item", "tea", "N91.1", ""},
 		{"R7", "unknown", "", "", "No item has the id R7."},
 		{"R1.2", "retired", "coffee", "", "R1.2 was retired at b-tank.shall.yaml:11."},
 		{"R3", "retired", "coffee", "", "R3 was retired at b-tank.shall.yaml:18."},
-		{"milk/N1", "unknown", "", "", "No set named milk is served here."},
+		{"milk/N91.1", "unknown", "", "", "No set named milk is served here."},
 	} {
 		var a resolveAnswer
 		answer(t, root, "/api/sets/coffee/resolve?id="+strings.ReplaceAll(c.id, " ", "+"), http.StatusOK, &a)
@@ -494,14 +518,14 @@ func TestFoundByWords(t *testing.T) {
 	}))
 	for _, c := range []struct{ q, want, message string }{
 		{"lamp", "title:R1 title:R1.1", ""},
-		{"Tank EMPTY", "text:N1 text:R1", ""},
+		{"Tank EMPTY", "text:N91.1 text:R1", ""},
 		{"r1", "id:R1 title:R1.1", ""},
-		{"brew", "title:O1 title:N1 title:R4 title:R5 text:R2", ""},
-		{"tea/n1", "id:N1@tea", ""},
+		{"brew", "title:O90 title:N91.1 title:R4 title:R5 text:R2", ""},
+		{"tea/n91.1", "id:N91.1@tea", ""},
 		{"lamp door", "", "No item holds lamp, door."},
 		{"R3", "", "R3 was retired at b-tank.shall.yaml:18."},
 		{"r99", "", "No item has the id r99."},
-		{"milk/N1", "", "No set named milk is served here."},
+		{"milk/N91.1", "", "No set named milk is served here."},
 	} {
 		var a searchAnswer
 		answer(t, root, "/api/sets/coffee/search?q="+strings.ReplaceAll(c.q, " ", "+"), http.StatusOK, &a)
@@ -537,7 +561,7 @@ func TestFindingsInPlace(t *testing.T) {
 	t.Attr("verifies", "R30.1")
 	root := testfile.Write(t, with(coffee(), map[string]string{
 		"shall.yaml":         "name: coffee\nformat: 1\nowner: me\n",
-		"c-loose.shall.yaml": "title: Loose\nrequirements:\n  - id: R6\n    title: A\n    text: The machine SHALL hum.\n    serves: [N1]\n    status: draft\n    retired:\n      - {id: R7.1, title: Elsewhere}\nextra: 1\n",
+		"c-loose.shall.yaml": "title: Loose\nitems:\n  - id: R6\n    title: A\n    text: The machine SHALL hum.\n    serves: [N91.1]\n    status: draft\n    retired:\n      - {id: R7.1, title: Elsewhere}\nextra: 1\n",
 	}))
 	a := setOf(t, root)
 	if len(a.Findings) != 1 || a.Findings[0].Field != "owner" || a.Findings[0].File != "shall.yaml" {
@@ -554,20 +578,20 @@ func TestFindingsInPlace(t *testing.T) {
 	if len(loose.Findings) != 1 || loose.Findings[0].Field != "extra" {
 		t.Errorf("file findings = %+v, want the extra field alone", loose.Findings)
 	}
-	if f := loose.Requirements[0].Findings; len(f) != 1 || !strings.Contains(f[0].Message, "R7.1 cannot be retired under R6") {
+	if f := loose.Items[0].Findings; len(f) != 1 || !strings.Contains(f[0].Message, "R7.1 cannot be retired under R6") {
 		t.Errorf("R6 findings = %+v, want R7.1 refused in R6's retired list", f)
 	}
 }
 
 func TestTheAnswersCarryTextAsWritten(t *testing.T) {
 	root := testfile.Write(t, with(coffee(), map[string]string{
-		"a-brew.shall.yaml": "title: Brewing\nrequirements:\n  - {id: R4, title: \"<script>alert(1)</script>\", text: The machine SHALL brew., serves: [N1], status: draft}\n",
+		"a-brew.shall.yaml": "title: Brewing\nitems:\n  - {id: R4, title: \"<script>alert(1)</script>\", text: The machine SHALL brew., serves: [N91.1], status: draft}\n",
 	}))
 	code, body := get(t, root, "/api/sets/coffee/files/a-brew.shall.yaml")
 	if code != http.StatusOK || strings.Contains(body, "<script>") {
 		t.Errorf("status %d, body %s; want 200 with no raw <script>", code, body)
 	}
-	if r4 := file(t, root, "a-brew.shall.yaml").Requirements[0]; r4.Title != "<script>alert(1)</script>" {
+	if r4 := file(t, root, "a-brew.shall.yaml").Items[0]; r4.Title != "<script>alert(1)</script>" {
 		t.Errorf("title = %q, want %q", r4.Title, "<script>alert(1)</script>")
 	}
 }
@@ -587,6 +611,33 @@ func TestPureCSSAndItsLicence(t *testing.T) {
 	code, licence := get(t, root, "/-/static/pure/LICENSE")
 	if code != http.StatusOK || !strings.Contains(licence, "Software License Agreement (BSD License)") {
 		t.Errorf("licence: status %d, %.80q; want 200 and the BSD licence", code, licence)
+	}
+}
+
+func TestMermaidAndItsLicence(t *testing.T) {
+	t.Attr("verifies", "R44.2")
+	root := testfile.Write(t, coffee())
+	code, script := get(t, root, "/-/static/mermaid/mermaid.min.js")
+	if code != http.StatusOK || len(script) < 1_000_000 {
+		t.Errorf("mermaid.min.js: status %d, %d bytes; want 200 and the whole script", code, len(script))
+	}
+	code, licence := get(t, root, "/-/static/mermaid/LICENSE")
+	if code != http.StatusOK || !strings.Contains(licence, "The MIT License") || !strings.Contains(licence, "Knut Sveidqvist") {
+		t.Errorf("licence: status %d, %.80q; want 200 and Mermaid's MIT licence", code, licence)
+	}
+}
+
+func TestStylesInlineEverythingElseItsOwn(t *testing.T) {
+	t.Attr("verifies", "R44.3")
+	root := testfile.Write(t, coffee())
+	for _, path := range []string{"/coffee/", "/api/sets/coffee", "/-/static/app.js"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Host = "localhost:7180"
+		w := httptest.NewRecorder()
+		New(root, true).Handler().ServeHTTP(w, req)
+		if got, want := w.Header().Get("Content-Security-Policy"), "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"; got != want {
+			t.Errorf("%s: policy %q, want %q", path, got, want)
+		}
 	}
 }
 
@@ -739,10 +790,10 @@ func TestStatusesOfEveryKindAreCounted(t *testing.T) {
 	root := testfile.Write(t, map[string]string{
 		"shall.yaml":         "name: coffee\nformat: 1\n",
 		"mission.shall.yaml": mission,
-		"c.shall.yaml": "title: C\nrequirements:\n" +
-			"  - {id: R1, title: A, text: The machine SHALL a., serves: [N1], status: verified}\n" +
-			"  - {id: R2, title: B, text: The machine SHALL b., serves: [N1], status: waived}\n" +
-			"  - {id: R3, title: C, text: The machine SHALL c., serves: [N1], status: pending}\n",
+		"c.shall.yaml": "title: C\nitems:\n" +
+			"  - {id: R1, title: A, text: The machine SHALL a., serves: [N91.1], status: verified}\n" +
+			"  - {id: R2, title: B, text: The machine SHALL b., serves: [N91.1], status: waived}\n" +
+			"  - {id: R3, title: C, text: The machine SHALL c., serves: [N91.1], status: pending}\n",
 	})
 	var a setsAnswer
 	answer(t, root, "/api/sets", http.StatusOK, &a)
@@ -754,9 +805,9 @@ func TestStatusesOfEveryKindAreCounted(t *testing.T) {
 func TestASearchListsAtMostFifty(t *testing.T) {
 	t.Attr("verifies", "R28.3")
 	var c strings.Builder
-	c.WriteString("title: Many\nrequirements:\n")
+	c.WriteString("title: Many\nitems:\n")
 	for i := 1; i <= 60; i++ {
-		fmt.Fprintf(&c, "  - {id: R%d, title: Lamp %d, text: The machine SHALL light lamp %d., serves: [N1], status: draft}\n", 100+i, i, i)
+		fmt.Fprintf(&c, "  - {id: R%d, title: Lamp %d, text: The machine SHALL light lamp %d., serves: [N91.1], status: draft}\n", 100+i, i, i)
 	}
 	root := testfile.Write(t, with(coffee(), map[string]string{"b-tank.shall.yaml": c.String()}))
 	var a searchAnswer
@@ -774,7 +825,7 @@ func TestReferencesThatLeadNowhereOrToARetiredParent(t *testing.T) {
 	t.Attr("verifies", "R27.4")
 	t.Attr("verifies", "R27.5")
 	root := testfile.Write(t, with(coffee(), map[string]string{
-		"a-brew.shall.yaml": "title: Brewing\nrequirements:\n  - {id: R4, title: Brew Button, text: When pressed the machine SHALL brew., serves: [R3.1], status: draft, mirrors: elsewhere/R1}\n",
+		"a-brew.shall.yaml": "title: Brewing\nitems:\n  - {id: R4, title: Brew Button, text: When pressed the machine SHALL brew., serves: [R3.1], status: draft, mirrors: elsewhere/R1}\n",
 	}))
 	r4 := item(t, root, "R4")
 	if len(r4.Serves) != 1 || r4.Serves[0] != (refJSON{ID: "R3.1", State: "retired", Set: "coffee", Title: "Water Handling", RetiredWith: "R3"}) {
@@ -791,12 +842,12 @@ func TestADependencyWithoutGitIsFoundFromTheServedDirectory(t *testing.T) {
 		"std/shall.yaml":             "name: standard\nformat: 1\n",
 		"std/mission.shall.yaml":     mission,
 		"product/shall.yaml":         "name: coffee\nformat: 1\ndepends:\n  company:\n    path: std\n  remote:\n    git: https://example.com/x\n    rev: v1\n",
-		"product/mission.shall.yaml": "mission: m\nstakeholders:\n  - {id: S1, title: A, text: t}\nneeds:\n  - {id: N1, title: A, text: t, stakeholder: S1, serves: [mission], status: hypothesis, mirrors: company/N1}\n  - {id: N2, title: A, text: t, stakeholder: S1, serves: [mission], status: hypothesis, mirrors: remote/N1}\n",
+		"product/mission.shall.yaml": "title: M\nmission: m\nitems:\n  - id: S91\n    title: A\n    text: t\n    children:\n      - {id: N91.1, title: A, text: t, serves: [mission], status: hypothesis, mirrors: company/N91.1}\n      - {id: N91.2, title: A, text: t, serves: [mission], status: hypothesis, mirrors: remote/N91.1}\n",
 	})
-	if m := item(t, root, "N1").Mirrors; m == nil || m.State != "item" || m.Set != "standard" {
-		t.Errorf("mirrors = %+v, want N1 of standard", m)
+	if m := item(t, root, "N91.1").Mirrors; m == nil || m.State != "item" || m.Set != "standard" {
+		t.Errorf("mirrors = %+v, want N91.1 of standard", m)
 	}
-	if m := item(t, root, "N2").Mirrors; m == nil || m.State != "unknown" {
+	if m := item(t, root, "N91.2").Mirrors; m == nil || m.State != "unknown" {
 		t.Errorf("a dependency in another repository = %+v, want unknown", m)
 	}
 }

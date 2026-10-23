@@ -257,14 +257,16 @@ h1 { font-size: 1.6rem; }
 .path { margin-left: auto; font-family: ui-monospace, monospace; }
 .statement { font-size: 1.15rem; }
 
-h3 {
-  margin: 1.4rem 0 0.4rem;
-  color: var(--muted);
-  font-size: 0.9rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  scroll-margin-top: calc(var(--bar) + 0.5rem);
-}
+.kind-topic > .text > :first-child { margin-top: 0; }
+.kind-topic > .text pre { overflow-x: auto; padding: 0.5rem; border: 1px solid var(--line); background: var(--soft); }
+.kind-topic > .text blockquote { margin-left: 0; padding-left: 1rem; border-left: 3px solid var(--muted); }
+.kind-topic > .text table { margin: 0.5rem 0; }
+.kind-topic > .text .md-heading { margin: 1rem 0 0.25rem; font-weight: bold; }
+.align-left { text-align: left; }
+.align-center { text-align: center; }
+.align-right { text-align: right; }
+figure.diagram { margin: 0.5rem 0; overflow-x: auto; }
+figure.diagram svg { max-width: 100%; height: auto; }
 
 .item {
   margin: 0.8rem 0;

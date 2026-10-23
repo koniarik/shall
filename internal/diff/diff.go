@@ -11,6 +11,7 @@ import (
 
 	"shall/internal/check"
 	"shall/internal/finding"
+	"shall/internal/markdown"
 	"shall/internal/model"
 	"shall/internal/set"
 	"shall/internal/tree"
@@ -57,8 +58,8 @@ type Values struct {
 	New any `json:"new,omitempty"`
 }
 
-// FileChange is a chapter added, removed or retitled, or a mission file
-// added or removed.
+// FileChange is a chapter added, removed or retitled, the mission file
+// among them.
 type FileChange struct {
 	Path string `json:"path"`
 	// Mission tells the mission file from a chapter.
@@ -285,7 +286,7 @@ func compareItems(b, h side) []ItemChange {
 		if old.File.Path != it.File.Path {
 			c.MovedFrom = old.File.Path
 		}
-		c.Fields = compareFields(old.Node, it.Node)
+		c.Fields = compareFields(it.Kind, old.Node, it.Node)
 		// The effective status is reported where it says more than the
 		// written one, as when a child lowers its parent.
 		oldEffective, newEffective := old.EffectiveStatus(), it.EffectiveStatus()
@@ -309,10 +310,11 @@ func compareItems(b, h side) []ItemChange {
 	return out
 }
 
-// compareFields returns the fields an item writes whose values differ, in
-// the order the head writes them, then those only the base writes.
-// Children and retired entries are items of their own.
-func compareFields(old, cur *tree.Node) []FieldChange {
+// compareFields returns the fields an item of a kind writes whose values
+// differ, in the order the head writes them, then those only the base
+// writes. Children and retired entries are items of their own. A topic's
+// text differs where its Markdown reads as other blocks.
+func compareFields(kind byte, old, cur *tree.Node) []FieldChange {
 	var keys []string
 	for _, n := range []*tree.Node{cur, old} {
 		for _, p := range n.Pairs {
@@ -327,7 +329,16 @@ func compareFields(old, cur *tree.Node) []FieldChange {
 		case "id", "children", "retired":
 			continue
 		}
-		out = appendChange(out, k, plain(old.Get(k)), plain(cur.Get(k)))
+		o, c := plain(old.Get(k)), plain(cur.Get(k))
+		a, aText := o.(string)
+		b, bText := c.(string)
+		if kind == 'T' && k == "text" && aText && bText {
+			if !reflect.DeepEqual(markdown.Blocks(a), markdown.Blocks(b)) {
+				out = append(out, FieldChange{Field: k, Old: o, New: c})
+			}
+			continue
+		}
+		out = appendChange(out, k, o, c)
 	}
 	return out
 }

@@ -24,10 +24,10 @@ func TestFilesInDocumentOrder(t *testing.T) {
 	t.Attr("verifies", "R26")
 	t.Attr("verifies", "R26.9")
 	s := parse(t, map[string]string{
-		"b/two.shall.yaml":     "title: B\nrequirements: []\n",
-		"a.shall.yaml":         "title: A\nrequirements: []\n",
-		"z/mission.shall.yaml": "mission: m\n",
-		"b/one.shall.yaml":     "title: C\nrequirements: []\n",
+		"b/two.shall.yaml":     "title: B\nitems: []\n",
+		"a.shall.yaml":         "title: A\nitems: []\n",
+		"z/mission.shall.yaml": "title: M\nmission: m\n",
+		"b/one.shall.yaml":     "title: C\nitems: []\n",
 	})
 	var got []string
 	for _, f := range s.Files {
@@ -47,7 +47,7 @@ func TestFilesInDocumentOrder(t *testing.T) {
 func TestEffectiveStatus(t *testing.T) {
 	t.Attr("verifies", "R26.3")
 	s := parse(t, map[string]string{"c.shall.yaml": `title: C
-requirements:
+items:
   - id: R1
     title: A
     text: t
@@ -87,24 +87,27 @@ requirements:
 func TestReferencesAndBacklinks(t *testing.T) {
 	t.Attr("verifies", "R27.2")
 	s := parse(t, map[string]string{
-		"mission.shall.yaml": `mission: m
+		"mission.shall.yaml": `title: M
+mission: m
 ranking: [O1]
-objectives:
+items:
   - {id: O1, title: A, text: t, measure: m}
-stakeholders:
-  - {id: S1, title: A, text: t}
-needs:
-  - {id: N1, title: A, text: t, stakeholder: S1, serves: [mission, O1], status: hypothesis}
+  - id: S2
+    title: A
+    text: t
+    children:
+      - {id: N2.1, title: A, text: t, stakeholders: [S3], serves: [mission, O1], status: hypothesis}
+  - {id: S3, title: A, text: t}
 `,
-		"c.shall.yaml": "title: C\nrequirements:\n  - {id: R1, title: A, text: t, serves: [N1, x/R5], status: draft}\n",
+		"c.shall.yaml": "title: C\nitems:\n  - {id: R4, title: A, text: t, serves: [N2.1, x/R5], status: draft}\n",
 	})
 	named := map[string]string{}
-	for _, id := range []string{"O1", "S1", "N1", "x/R5", "mission"} {
+	for _, id := range []string{"O1", "S2", "S3", "N2.1", "x/R5", "mission"} {
 		for _, r := range s.NamedBy(id) {
 			named[id] += r.From.ID + "." + r.Field + " "
 		}
 	}
-	want := map[string]string{"O1": "N1.serves ", "S1": "N1.stakeholder ", "N1": "R1.serves ", "x/R5": "R1.serves "}
+	want := map[string]string{"O1": "N2.1.serves ", "S3": "N2.1.stakeholders ", "N2.1": "R4.serves ", "x/R5": "R4.serves ", "S2": ""}
 	for id, w := range want {
 		if named[id] != w {
 			t.Errorf("NamedBy(%s) = %q, want %q", id, named[id], w)
@@ -121,7 +124,7 @@ needs:
 func TestRetiredWithAnAncestor(t *testing.T) {
 	t.Attr("verifies", "R27.5")
 	s := parse(t, map[string]string{"c.shall.yaml": `title: C
-requirements:
+items:
   - id: R1
     title: A
     text: t
@@ -146,7 +149,7 @@ retired:
 }
 
 func TestTitlesTextsAndChapterTitles(t *testing.T) {
-	s := parse(t, map[string]string{"c.shall.yaml": "title: Water Tank\nrequirements:\n  - {id: R1, title: Refill Lamp, text: The lamp SHALL light., status: draft}\n"})
+	s := parse(t, map[string]string{"c.shall.yaml": "title: Water Tank\nitems:\n  - {id: R1, title: Refill Lamp, text: The lamp SHALL light., status: draft}\n"})
 	f := s.Files[0]
 	if f.Title() != "Water Tank" || f.Mission {
 		t.Errorf("file = %q, mission %v; want Water Tank, a chapter", f.Title(), f.Mission)
@@ -162,7 +165,7 @@ func TestTitlesTextsAndChapterTitles(t *testing.T) {
 }
 
 func TestAStatusOutsideTheOrder(t *testing.T) {
-	s := parse(t, map[string]string{"c.shall.yaml": "title: C\nrequirements:\n  - {id: R1, title: A, text: t, status: pending}\n  - {id: R2, title: A, text: t}\n"})
+	s := parse(t, map[string]string{"c.shall.yaml": "title: C\nitems:\n  - {id: R1, title: A, text: t, status: pending}\n  - {id: R2, title: A, text: t}\n"})
 	if got := s.Item("R1").EffectiveStatus(); got != "pending" {
 		t.Errorf("effective status = %q, want the status as written", got)
 	}
@@ -173,7 +176,7 @@ func TestAStatusOutsideTheOrder(t *testing.T) {
 
 func TestEntriesWithoutAnIdAreLeftOut(t *testing.T) {
 	s := parse(t, map[string]string{"c.shall.yaml": `title: C
-requirements:
+items:
   - {title: No Id, text: t, children: [{id: R9, title: A, text: t}]}
   - id: R1
     title: A
@@ -199,7 +202,7 @@ retired:
 }
 
 func TestRetiredEntryIsExact(t *testing.T) {
-	s := parse(t, map[string]string{"c.shall.yaml": "title: C\nrequirements: []\nretired:\n  - {id: R2, title: Gone}\n  - {id: R2, title: Again}\n"})
+	s := parse(t, map[string]string{"c.shall.yaml": "title: C\nitems: []\nretired:\n  - {id: R2, title: Gone}\n  - {id: R2, title: Again}\n"})
 	if e := s.RetiredEntry("R2"); e == nil || e.Title != "Gone" {
 		t.Errorf("RetiredEntry(R2) = %+v, want the first entry", e)
 	}
@@ -212,7 +215,7 @@ func TestRetiredEntryIsExact(t *testing.T) {
 }
 
 func TestRankingSkipsWhatIsNoId(t *testing.T) {
-	s := parse(t, map[string]string{"mission.shall.yaml": "mission: m\nranking: [O1, 7, {a: b}, O2]\n"})
+	s := parse(t, map[string]string{"mission.shall.yaml": "title: M\nmission: m\nranking: [O1, 7, {a: b}, O2]\n"})
 	var got []string
 	for _, r := range s.Ranking() {
 		got = append(got, r.ID)
@@ -225,8 +228,8 @@ func TestRankingSkipsWhatIsNoId(t *testing.T) {
 func TestABrokenFileHoldsNothing(t *testing.T) {
 	s := New([]*File{
 		{Path: "b.shall.yaml"},
-		{Path: "mission.shall.yaml", Tree: mustParse(t, "mission: m\nranking: [O1]\n")},
-		{Path: "a.shall.yaml", Tree: mustParse(t, "title: A\nrequirements:\n  - {id: R1, title: A, text: t, status: draft}\n")},
+		{Path: "mission.shall.yaml", Tree: mustParse(t, "title: M\nmission: m\nranking: [O1]\n")},
+		{Path: "a.shall.yaml", Tree: mustParse(t, "title: A\nitems:\n  - {id: R1, title: A, text: t, status: draft}\n")},
 	})
 	var paths []string
 	for _, f := range s.Files {
@@ -237,6 +240,94 @@ func TestABrokenFileHoldsNothing(t *testing.T) {
 	}
 	if len(s.Items) != 1 || len(s.Ranking()) != 1 || s.Files[2].Items != nil {
 		t.Errorf("items = %d, ranking = %d, broken file items = %v; want 1, 1 and none", len(s.Items), len(s.Ranking()), s.Files[2].Items)
+	}
+}
+
+func TestKindsMixAndTopicsArePassedOver(t *testing.T) {
+	t.Attr("verifies", "R26.3")
+	s := parse(t, map[string]string{"c.shall.yaml": `title: C
+items:
+  - id: R1
+    title: A
+    text: t
+    serves: [N9]
+    status: verified
+    children:
+      - id: T1.1
+        title: Part
+        children:
+          - {id: R1.1.1, title: A, text: t, status: implemented}
+          - {id: T1.1.2, title: Deeper, children: [{id: R1.1.2.1, title: A, text: t, status: draft}]}
+  - id: S2
+    title: A
+    text: t
+    children:
+      - id: N2.1
+        title: A
+        text: t
+        stakeholders: [S3]
+        status: hypothesis
+        children:
+          - id: T2.1.1
+            title: Part
+            children:
+              - {id: N2.1.1.1, title: A, text: t, status: hypothesis}
+  - id: T3
+    title: Loose
+    children:
+      - {id: R3.1, title: A, text: t, status: draft}
+`})
+	if got := s.Item("R1").EffectiveStatus(); got != "draft" {
+		t.Errorf("R1's effective status = %q, want draft, from R1.1.2.1 below two topics", got)
+	}
+	if got := s.Item("T1.1").Kind; got != 'T' {
+		t.Errorf("T1.1's kind = %c, want T, from its letter", got)
+	}
+	if above := s.Item("R1.1.2.1").Above(); above == nil || above.ID != "R1" {
+		t.Errorf("above R1.1.2.1 = %v, want R1, through the topics", above)
+	}
+	if got, _ := s.Item("R1.1.1").Inherited("serves").Items[0].Str(); got != "N9" {
+		t.Errorf("R1.1.1 inherits serves %q, want N9 from R1", got)
+	}
+	if s.Item("R3.1").Above() != nil || s.Item("R3.1").Inherited("serves") != nil {
+		t.Error("R3.1, under a topic alone, inherits from something")
+	}
+	deep := s.Item("N2.1.1.1")
+	if c := deep.Class(); c == nil || c.ID != "S2" {
+		t.Errorf("N2.1.1.1's class = %v, want S2, through a need and a topic", c)
+	}
+	if got, _ := deep.Inherited("stakeholders").Items[0].Str(); got != "S3" {
+		t.Errorf("N2.1.1.1 inherits stakeholders %q, want S3 from N2.1", got)
+	}
+	if s.Item("R1").Class() != nil {
+		t.Error("a requirement has a class")
+	}
+	var below []string
+	for _, it := range s.Item("R1").Below('R') {
+		below = append(below, it.ID)
+	}
+	if got := strings.Join(below, " "); got != "R1.1.1 R1.1.2.1" {
+		t.Errorf("requirements below R1 = %s, want R1.1.1 R1.1.2.1", got)
+	}
+}
+
+func TestThePathNamesAnItem(t *testing.T) {
+	t.Attr("verifies", "R27.5")
+	s := parse(t, map[string]string{"c.shall.yaml": `title: C
+items:
+  - {id: R1, title: A, text: t, status: draft}
+  - {id: T1, title: Same Path}
+retired:
+  - {id: R2, title: Gone}
+`})
+	if s.Item("R1") == nil || s.Item("N1") != nil || s.Item("T1") != nil {
+		t.Errorf("Item(R1, N1, T1) = %v, %v, %v; want R1 alone: a path names one item, the first", s.Item("R1"), s.Item("N1"), s.Item("T1"))
+	}
+	if it := s.AtPath("N1"); it == nil || it.ID != "R1" {
+		t.Errorf("AtPath(N1) = %v, want R1, whatever the letter", it)
+	}
+	if e := s.RetiredEntry("T2"); e == nil || e.ID != "R2" {
+		t.Errorf("RetiredEntry(T2) = %v, want R2's entry: a path is retired under every letter", e)
 	}
 }
 

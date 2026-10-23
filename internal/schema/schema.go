@@ -86,7 +86,7 @@ func (v *Validator) checkSchema(s map[string]any, file, where string) error {
 					return err
 				}
 			}
-		case "items", "propertyNames":
+		case "items", "propertyNames", "if", "then", "else":
 			sub, ok := val.(map[string]any)
 			if !ok {
 				return bad()
@@ -274,7 +274,29 @@ func (v *Validator) validate(s map[string]any, base string, n *tree.Node, c scop
 	if branches, ok := s["anyOf"].([]any); ok && !v.anyOf(branches, base, n, c, evaluated) {
 		*out = append(*out, c.report(n.Line, "%s is not valid in %s", n.Text(), c.subject()))
 	}
+	if cond, ok := s["if"].(map[string]any); ok {
+		v.ifThenElse(s, cond, base, n, c, out, evaluated)
+	}
 	return evaluated
+}
+
+// ifThenElse checks n against then where it holds to cond, and against else
+// where it does not; cond itself reports nothing.
+func (v *Validator) ifThenElse(s, cond map[string]any, base string, n *tree.Node, c scope, out *[]finding.Finding, evaluated map[string]bool) {
+	var trial []finding.Finding
+	ev := v.validate(cond, base, n, c, &trial)
+	branch := "else"
+	if len(trial) == 0 {
+		branch = "then"
+		for k := range ev {
+			evaluated[k] = true
+		}
+	}
+	if b, ok := s[branch].(map[string]any); ok {
+		for k := range v.validate(b, base, n, c, out) {
+			evaluated[k] = true
+		}
+	}
 }
 
 func (v *Validator) anyOf(branches []any, base string, n *tree.Node, c scope, evaluated map[string]bool) bool {

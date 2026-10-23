@@ -1,6 +1,6 @@
 ---
 title: Design
-requirements:
+items:
   - id: R19
     title: A Single Go Binary
     text: The tool SHALL be one binary, written in Go, that runs with nothing else installed but
@@ -10,7 +10,7 @@ requirements:
       would need Node.js, which refuses to run TypeScript inside node_modules, and npm is
       blocking the build-on-install that a hook installed from git would rely on. Rust was not
       taken for its weaker YAML libraries and slower builds.
-    serves: [N11]
+    serves: [N52.4]
     verify: inspection
     status: implemented
     children:
@@ -27,7 +27,7 @@ requirements:
         rationale: The code then reads the same wherever the repository is hosted. Naming the
           module after its repository's address was not taken; it would let go install fetch a
           release by that address, which pre-commit and release binaries make unnecessary.
-        serves: [N12]
+        serves: [N57.2]
         verify: inspection
         status: implemented
   - id: R20
@@ -36,7 +36,7 @@ requirements:
     rationale: It is maintained, and its syntax tree keeps the position of every token, which
       gives each finding its line. go-yaml v3 was not taken because it is frozen, and v4 because
       it is still a release candidate.
-    serves: [R3, N5]
+    serves: [R3, N55.1]
     verify: inspection
     status: implemented
     children:
@@ -47,7 +47,7 @@ requirements:
         rationale: Edits then show in a diff as the change and nothing else, whatever layout a
           library would have chosen, and the files a set holds stay alike. The files use a small
           part of YAML, which a short printer covers.
-        serves: [N1, N5]
+        serves: [N52.1, N55.1]
         status: approved
   - id: R21
     title: Own Schema Validator
@@ -89,7 +89,7 @@ requirements:
     rationale: One flag set per command covers a directory argument and a few options without a
       dependency. Cobra was not taken; its generated help and command trees pay off only for a
       command line far larger than this one.
-    serves: [N5]
+    serves: [N55.1]
     verify: inspection
     status: implemented
   - id: R24
@@ -97,7 +97,7 @@ requirements:
     text: The tool's source SHALL follow the Google Go Style Guide.
     rationale: Contributors and agents expect the language's common conventions rather than a
       house style they must first learn.
-    serves: [N12]
+    serves: [N57.2]
     verify: inspection
     status: implemented
     links:
@@ -237,7 +237,7 @@ requirements:
       than HTML keep the page building text as text.
     serves: [R26.16, R31]
     verify: inspection
-    status: approved
+    status: implemented
     links:
       - url: https://github.com/yuin/goldmark
         title: goldmark
@@ -251,7 +251,7 @@ requirements:
       dot installed beside the binary.
     serves: [R26.16]
     verify: inspection
-    status: approved
+    status: implemented
     links:
       - url: https://mermaid.js.org/
         title: Mermaid
@@ -262,9 +262,19 @@ requirements:
         rationale: Mermaid then cleans a diagram's labels of markup and runs no script in them,
           so a diagram cannot add script to the page.
         serves: [R7]
-        status: approved
+        status: implemented
       - id: R44.2
         title: Licence Shipped
         text: The server SHALL serve Mermaid's licence beside it.
         rationale: The MIT licence asks that every copy include its notice.
-        status: approved
+        status: implemented
+      - id: R44.3
+        title: Styles Inline, Everything Else Its Own
+        text: The server SHALL let its pages apply inline styles, and take scripts, images, fonts
+          and connections only from the server itself.
+        rationale: Mermaid styles its drawings inline. A style a diagram slipped in can then load
+          or send nothing beyond the server, and a script it slipped in does not run. Drawing each
+          diagram as an image instead was not taken because Mermaid still measures it in the page,
+          and the image needs sizing of its own.
+        serves: [R7]
+        status: implemented

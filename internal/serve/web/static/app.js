@@ -187,10 +187,117 @@ function links(list) {
   }));
 }
 
+// A topic's text comes as blocks of text, which the page builds as text.
+
+function blocks(list, level) {
+  return list.map((b) => block(b, level));
+}
+
+function block(b, level) {
+  switch (b.type) {
+    case 'heading':
+      return h('div', {'class': 'md-heading', 'role': 'heading', 'aria-level': Math.min(level + b.level, 6)},
+          inline(b.inline));
+    case 'list':
+      return h(b.ordered ? 'ol' : 'ul', {start: b.ordered && b.start !== 1 ? b.start : null},
+          b.items.map((it) => h('li', {}, blocks(it, level))));
+    case 'quote':
+      return h('blockquote', {}, blocks(b.blocks, level));
+    case 'code':
+      return h('pre', {}, h('code', {}, b.text));
+    case 'html':
+      return h('pre', {class: 'html'}, h('code', {}, b.text));
+    case 'rule':
+      return h('hr', {});
+    case 'table':
+      return h('table', {class: 'pure-table'},
+          h('thead', {}, h('tr', {}, b.head.map((c, i) => h('th', {class: b.align?.[i] ? 'align-' + b.align[i] : null}, inline(c))))),
+          h('tbody', {}, b.rows.map((row) => h('tr', {},
+              row.map((c, i) => h('td', {class: b.align?.[i] ? 'align-' + b.align[i] : null}, inline(c)))))));
+    case 'diagram':
+      return diagram(b.text);
+    default:
+      return h('p', {}, inline(b.inline ?? []));
+  }
+}
+
+function inline(list) {
+  return list.map((x) => {
+    switch (x.type) {
+      case 'emphasis':
+        return h('em', {}, inline(x.inline));
+      case 'strong':
+        return h('strong', {}, inline(x.inline));
+      case 'code':
+        return h('code', {}, x.text);
+      case 'break':
+        return h('br', {});
+      case 'link': {
+        const url = safeURL(x.url);
+        return url ? h('a', {href: url, title: x.title || null, target: '_blank', rel: 'noreferrer'}, inline(x.inline)) :
+          inline(x.inline);
+      }
+      default:
+        return x.text;
+    }
+  });
+}
+
+// Diagrams: Mermaid draws each, loaded the first time the page shows one.
+// Its drawing is the one markup the page puts in, made at Mermaid's strict
+// level, which runs no script in a diagram, and with labels drawn as text
+// rather than HTML.
+
+let mermaidLoaded = null;
+let drawing = Promise.resolve();
+let drawn = 0;
+
+function loadMermaid() {
+  mermaidLoaded ??= new Promise((resolve, reject) => {
+    const s = h('script', {src: '/-/static/mermaid/mermaid.min.js'});
+    s.addEventListener('load', () => resolve(window.mermaid));
+    s.addEventListener('error', () => reject(new Error('Mermaid did not load')));
+    document.head.append(s);
+  });
+  return mermaidLoaded;
+}
+
+// diagram shows a diagram's source until Mermaid has drawn it.
+function diagram(source) {
+  const el = h('figure', {'class': 'diagram', 'data-source': source}, h('pre', {}, h('code', {}, source)));
+  draw(el);
+  return el;
+}
+
+// draw draws a diagram in the colour scheme shown, one diagram at a time; a
+// diagram Mermaid cannot draw shows its source and why.
+function draw(el) {
+  drawing = drawing.then(async () => {
+    try {
+      const mermaid = await loadMermaid();
+      mermaid.initialize({
+        startOnLoad: false, securityLevel: 'strict', htmlLabels: false, flowchart: {htmlLabels: false},
+        theme: scheme() === 'dark' ? 'dark' : 'neutral',
+      });
+      const {svg} = await mermaid.render('diagram-' + ++drawn, el.dataset.source);
+      el.innerHTML = svg;
+      el.dataset.drawn = 'true';
+    } catch (e) {
+      el.replaceChildren(h('pre', {}, h('code', {}, el.dataset.source)), h('p', {class: 'finding error'},
+          h('span', {class: 'severity'}, 'error'), ' · the diagram cannot be drawn: ', String(e?.message ?? e)));
+      el.dataset.drawn = 'false';
+    }
+  });
+}
+
+function redraw() {
+  for (const el of main.querySelectorAll('figure.diagram')) draw(el);
+}
+
 function item(it, level) {
   const requirement = it.kind === 'requirement';
   const fields = [
-    it.stakeholder ? field('stakeholder', titled(it.stakeholder)) : null,
+    it.stakeholders?.length ? field('stakeholders', refs(it.stakeholders, titled)) : null,
     it.measure ? field('measure', it.measure) : null,
     it.verify ? field('verify', it.verify) : null,
     it.mirrors ? field('mirrors', titled(it.mirrors)) : null,
@@ -227,20 +334,19 @@ function item(it, level) {
   },
       h('div', {'class': 'head', 'role': 'heading', 'aria-level': Math.min(level, 6)},
           ref({id: it.id, state: 'item', set: state.set.name, file: it.file}, false), ' ',
-          h('span', {class: 'title'}, it.title), ' ', status(it)),
+          h('span', {class: 'title'}, it.title), ' ', status(it),
+          it.requirements?.total ? h('span', {class: 'counts'}, statuses(it.requirements)) : null),
       it.serves?.length ? h('p', {class: 'serves'}, 'serves ', refs(it.serves, titled)) : null,
-      h('p', {class: 'text'}, it.text),
+      it.blocks ? h('div', {class: 'text'}, blocks(it.blocks, level)) : it.text ? h('p', {class: 'text'}, it.text) : null,
       fields.length ? h('dl', {class: 'fields'}, fields) : null,
       findings(it.findings),
       fold,
       it.children?.length ? h('div', {class: 'children'}, it.children.map((c) => item(c, level + 1))) : null);
 }
 
-const missionParts = [['Objectives', 'objectives'], ['Stakeholders', 'stakeholders'], ['Needs', 'needs']];
-
 function heading(entry) {
   if (entry.broken) return entry.path;
-  return entry.kind === 'mission' ? 'Mission' : entry.title || entry.path;
+  return entry.title || (entry.kind === 'mission' ? 'Mission' : entry.path);
 }
 
 // section shows one file of the set: the mission file in full, a chapter
@@ -256,16 +362,11 @@ function section(entry) {
   const matching = matches(entry);
   const empty = foldable && emptyUnderFilter(entry);
   let content = null;
-  if (open && mission) {
+  if (open) {
     content = [
-      entry.mission ? h('p', {class: 'statement'}, entry.mission) : null,
-      missionParts.filter(([, key]) => entry[key]?.length).map(([name, key]) => [
-        h('h3', {'id': anchor + ':' + name, 'data-anchor': true}, name),
-        entry[key].map((it) => item(it, 4)),
-      ]),
+      mission && entry.mission ? h('p', {class: 'statement'}, entry.mission) : null,
+      (full.items ?? []).map((it) => item(it, 3)),
     ];
-  } else if (open) {
-    content = (full.requirements ?? []).map((it) => item(it, 3));
   }
   return h('section', {
     'class': 'file' + (mission ? ' mission' : '') + (entry.broken ? ' broken' : ''),
@@ -284,22 +385,26 @@ function section(entry) {
   h('div', {id: 'body:' + entry.path}, content));
 }
 
+// outlined lists items in the outline, each topic with the topics it holds
+// under it.
+function outlined(items, path) {
+  return items.map((it) => {
+    const topics = it.kind === 'topic' ? (it.children ?? []).filter((c) => c.kind === 'topic') : [];
+    return h('li', {class: 'pure-menu-item'},
+        h('a', {
+          'class': 'pure-menu-link', 'href': setBase(state.set.name) + encodeURIComponent(it.id),
+          'data-item': it.id, 'data-chapter': path, 'data-local': true,
+        }, h('span', {class: 'ref'}, it.id), ' ', it.title),
+        topics.length ? h('ul', {class: 'pure-menu-list'}, outlined(topics, path)) : null);
+  });
+}
+
 function renderOutline() {
   if (!state.set) return;
   const entries = state.set.files.map((f) => {
     const anchor = 'file:' + f.path;
-    let sub = [];
-    if (f.kind === 'mission' && !f.broken) {
-      sub = missionParts.filter(([, key]) => f[key]?.length).map(([name]) => h('li', {class: 'pure-menu-item'},
-          h('a', {'class': 'pure-menu-link', 'href': '#' + anchor + ':' + name, 'data-scroll': anchor + ':' + name},
-              name)));
-    } else if (state.chapters.has(f.path)) {
-      sub = (state.chapters.get(f.path).requirements ?? []).map((it) => h('li', {class: 'pure-menu-item'},
-          h('a', {
-            'class': 'pure-menu-link', 'href': setBase(state.set.name) + encodeURIComponent(it.id),
-            'data-item': it.id, 'data-chapter': f.path, 'data-local': true,
-          }, h('span', {class: 'ref'}, it.id), ' ', it.title)));
-    }
+    const full = f.kind === 'mission' ? f : state.chapters.get(f.path);
+    const sub = full && !f.broken ? outlined(full.items ?? [], f.path) : [];
     return h('li', {'class': 'pure-menu-item', 'data-for': anchor},
         h('a', {
           'class': 'pure-menu-link' + (f.broken ? ' broken' : ''), 'href': '#' + anchor, 'data-scroll': anchor,
@@ -543,8 +648,7 @@ function show(id, focus = true) {
   if (focus) el.focus({preventScroll: true});
 }
 
-// goTo shows a chapter or a part of the mission, unfolding a folded chapter
-// first.
+// goTo shows a chapter, unfolding it first when it is folded.
 async function goTo(id) {
   const sec = document.getElementById(id);
   if (sec?.dataset.open === 'false' && !sec.classList.contains('broken')) await setChapter(sec, true);
@@ -603,8 +707,8 @@ document.addEventListener('toggle', (e) => {
 }, true);
 
 // The outline marks the chapter at the top of the screen, and the part of it
-// the reader is in: a top-level item of a chapter, or a part of the mission.
-// It keeps the marked entry in sight.
+// the reader is in: one of its top-level items. It keeps the marked entry in
+// sight.
 
 // lastAbove returns the last of els whose top is above edge.
 function lastAbove(els, edge) {
@@ -622,7 +726,7 @@ function mark() {
   const edge = (document.querySelector('.bar')?.getBoundingClientRect().bottom ?? 0) + 8;
   const sections = [...main.querySelectorAll('section.file')];
   const current = lastAbove(sections, edge) ?? sections[0];
-  const part = current && lastAbove([...current.querySelectorAll(':scope > div > article.item, :scope > div > h3')], edge);
+  const part = current && lastAbove([...current.querySelectorAll(':scope > div > article.item')], edge);
   let shown = null;
   for (const li of outline.querySelectorAll('#outline-menu > ul > li')) {
     const on = li.dataset.for === current?.id;
@@ -630,7 +734,7 @@ function mark() {
     if (on) shown = li.querySelector(':scope > a');
     for (const sub of li.querySelectorAll(':scope > ul > li')) {
       const a = sub.querySelector(':scope > a');
-      const subOn = on && Boolean(part) && (a.dataset.item ?? a.dataset.scroll) === part.id;
+      const subOn = on && Boolean(part) && a.dataset.item === part.id;
       markEntry(sub, subOn);
       if (subOn) shown = a;
     }
@@ -672,9 +776,14 @@ function scheme() {
   return root.dataset.theme || (dark.matches ? 'dark' : 'light');
 }
 
+dark.addEventListener('change', () => {
+  if (!root.dataset.theme) redraw();
+});
+
 document.querySelector('button.scheme').addEventListener('click', () => {
   const next = scheme() === 'dark' ? 'light' : 'dark';
   root.dataset.theme = next;
+  redraw();
   try {
     localStorage.setItem('shall-scheme', next);
   } catch {
@@ -685,6 +794,7 @@ document.querySelector('button.scheme').addEventListener('click', () => {
 addEventListener('storage', (e) => {
   if (e.key === 'shall-scheme' && (e.newValue === 'dark' || e.newValue === 'light')) {
     root.dataset.theme = e.newValue;
+    redraw();
   }
 });
 

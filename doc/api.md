@@ -50,21 +50,43 @@ Every id an item names comes as a reference, which says what the id names:
 
 ## Items
 
-An item carries `id`, `kind` (`objective`, `stakeholder`, `need` or
-`requirement`), `title`, `text`, and the `file` and `line` it is written at,
-then the fields of its kind as written: `measure`, `stakeholder`, `serves`,
-`rationale`, `verify`, `status`, `notes`, `links`, `mirrors`, `retired`, with
-every id as a reference. Fields an item leaves out are left out.
+An item carries `id`, `kind` (`objective`, `stakeholder`, `need`,
+`requirement` or `topic`), `title`, `text`, and the `file` and `line` it is
+written at, then the fields of its kind as written: `measure`,
+`stakeholders`, `serves`, `rationale`, `verify`, `status`, `notes`, `links`,
+`mirrors`, `retired`, with every id as a reference. Fields an item leaves out
+are left out. A topic's `text` is its Markdown as written.
 
 What the server works out:
 
 | Field | Meaning |
 |---|---|
-| `effectiveStatus` | A requirement's lowest status, counting its children, as [format.md](format.md) defines it |
+| `effectiveStatus` | A requirement's lowest status, counting the requirements below it, as [format.md](format.md) defines it |
 | `namedBy` | The items that name this one, each a reference with the `field` that names it |
 | `findings` | The findings of `shall check` that concern this item |
-| `children` | The item's children, in full |
-| `context` | Set on a requirement shown only because a child matches the statuses a file was asked for |
+| `children` | The item's children, of every kind, in full |
+| `requirements` | A topic's requirements, all below it, by effective status |
+| `blocks` | A topic's text read as Markdown, as below |
+| `context` | Set on a requirement or topic shown only because an item below it matches the statuses a file was asked for |
+
+A topic's `blocks` are its text as blocks of text, each with a `type`:
+
+| `type` | Carries |
+|---|---|
+| `heading` | `level`, from 1, and `inline` |
+| `paragraph` | `inline` |
+| `list` | `ordered`, `start` when ordered, and `items`, each a list of blocks |
+| `quote` | `blocks` |
+| `code` | `language` as its fence names it, and `text` |
+| `diagram` | `text`, the Mermaid source of a code block marked `mermaid` |
+| `table` | `align` per column (`left`, `center`, `right` or none), `head`, a list of cells, and `rows`, each a list of cells; a cell is a list of `inline` |
+| `rule` | nothing more |
+| `html` | `text`, the HTML as written, to be shown as text |
+
+Within a block, `inline` is a list of runs, each with a `type`: `text` and
+`code` carry `text`; `emphasis` and `strong` carry `inline`; `link` carries
+`url`, `title` when it has one, and `inline`, an image coming as a link to
+it; `break` carries nothing. HTML within a line comes as `text`.
 
 ## `GET /api/sets`
 
@@ -128,6 +150,7 @@ that cannot be read or parsed has `"broken": true` and its findings.
     {
       "path": "requirements/mission.shall.yaml",
       "kind": "mission",
+      "title": "Why The Machine Exists",
       "counts": {
         "items": 3,
         "findings": 0,
@@ -152,23 +175,64 @@ that cannot be read or parsed has `"broken": true` and its findings.
           "file": "requirements/mission.shall.yaml"
         }
       ],
-      "objectives": [
+      "items": [
         {
           "id": "O1",
           "kind": "objective",
           "title": "No Dry Brews",
           "text": "No brew starts while the water tank is empty.",
           "file": "requirements/mission.shall.yaml",
-          "line": 4,
+          "line": 5,
           "measure": "brews started on an empty tank, per thousand brews.",
           "namedBy": [
             {
               "field": "serves",
-              "id": "N1",
+              "id": "N2.1",
               "state": "item",
               "set": "coffee",
               "title": "Know Before Brewing",
               "file": "requirements/mission.shall.yaml"
+            }
+          ]
+        },
+        {
+          "id": "S2",
+          "kind": "stakeholder",
+          "title": "Office User",
+          "text": "Wants coffee without having to look after the machine.",
+          "file": "requirements/mission.shall.yaml",
+          "line": 9,
+          "children": [
+            {
+              "id": "N2.1",
+              "kind": "need",
+              "title": "Know Before Brewing",
+              "text": "Know before I brew that the tank needs water.",
+              "file": "requirements/mission.shall.yaml",
+              "line": 13,
+              "status": "validated",
+              "serves": [
+                {
+                  "id": "O1",
+                  "state": "item",
+                  "set": "coffee",
+                  "title": "No Dry Brews",
+                  "file": "requirements/mission.shall.yaml"
+                }
+              ],
+              "notes": [
+                "Heard from three users in the first week of the trial."
+              ],
+              "namedBy": [
+                {
+                  "field": "serves",
+                  "id": "R3.1",
+                  "state": "item",
+                  "set": "coffee",
+                  "title": "Refill Lamp",
+                  "file": "requirements/01-tank.shall.yaml"
+                }
+              ]
             }
           ]
         }
@@ -179,7 +243,7 @@ that cannot be read or parsed has `"broken": true` and its findings.
       "kind": "chapter",
       "title": "Water Tank",
       "counts": {
-        "items": 2,
+        "items": 3,
         "findings": 0,
         "requirements": {
           "total": 2,
@@ -194,10 +258,10 @@ that cannot be read or parsed has `"broken": true` and its findings.
       "findings": [],
       "retired": [
         {
-          "id": "R2",
+          "id": "R4",
           "title": "Water Handling",
           "file": "requirements/01-tank.shall.yaml",
-          "line": 22
+          "line": 27
         }
       ]
     }
@@ -205,17 +269,14 @@ that cannot be read or parsed has `"broken": true` and its findings.
 }
 ```
 
-The mission file's `stakeholders` and `needs` are left out of this example;
-the server sends them after `objectives`, each item in the same shape.
-
 ## `GET /api/sets/{set}/files/{path}`
 
-One file with its items, children nested; `requirements` for a chapter,
-`objectives`, `stakeholders` and `needs` for the mission file.
+One file with its items in reading order, children nested.
 
 `?status=` once or more, such as `?status=draft&status=approved`, keeps only
-the requirements at one of those effective statuses, and their parents as
-context, marked `"context": true`.
+the requirements at one of those effective statuses, with the requirements
+and topics above them as context, marked `"context": true`. Items of the
+other kinds stay.
 
 ```json
 {
@@ -224,7 +285,7 @@ context, marked `"context": true`.
   "kind": "chapter",
   "title": "Water Tank",
   "counts": {
-    "items": 2,
+    "items": 3,
     "findings": 0,
     "requirements": {
       "total": 2,
@@ -237,60 +298,103 @@ context, marked `"context": true`.
     }
   },
   "findings": [],
-  "requirements": [
+  "items": [
     {
-      "id": "R1",
-      "kind": "requirement",
-      "title": "Refill Lamp",
-      "text": "When the tank becomes empty, the machine SHALL light the refill lamp.",
+      "id": "T3",
+      "kind": "topic",
+      "title": "Water Level",
+      "text": "The tank is *empty* once the water is below the pump's intake.\n",
       "file": "requirements/01-tank.shall.yaml",
       "line": 3,
-      "status": "implemented",
-      "effectiveStatus": "implemented",
-      "serves": [
-        {
-          "id": "N1",
-          "state": "item",
-          "set": "coffee",
-          "title": "Know Before Brewing",
-          "file": "requirements/mission.shall.yaml"
-        }
-      ],
-      "links": [
-        {
-          "url": "https://ci.example.com/runs/4711",
-          "title": "Tank tests on hardware revision C"
-        }
-      ],
-      "retired": [
-        {
-          "id": "R1.2",
-          "title": "Refill Beep",
-          "file": "requirements/01-tank.shall.yaml",
-          "line": 19
-        }
-      ],
       "children": [
         {
-          "id": "R1.1",
+          "id": "R3.1",
           "kind": "requirement",
-          "title": "Lamp Seen From The Door",
-          "text": "The machine SHALL show the refill lamp to anyone standing at the kitchen door.",
+          "title": "Refill Lamp",
+          "text": "When the tank becomes empty, the machine SHALL light the refill lamp.",
           "file": "requirements/01-tank.shall.yaml",
-          "line": 12,
+          "line": 8,
           "status": "implemented",
           "effectiveStatus": "implemented",
-          "verify": "inspection"
+          "serves": [
+            {
+              "id": "N2.1",
+              "state": "item",
+              "set": "coffee",
+              "title": "Know Before Brewing",
+              "file": "requirements/mission.shall.yaml"
+            }
+          ],
+          "links": [
+            {
+              "url": "https://ci.example.com/runs/4711",
+              "title": "Tank tests on hardware revision C"
+            }
+          ],
+          "retired": [
+            {
+              "id": "R3.1.2",
+              "title": "Refill Beep",
+              "file": "requirements/01-tank.shall.yaml",
+              "line": 24
+            }
+          ],
+          "children": [
+            {
+              "id": "R3.1.1",
+              "kind": "requirement",
+              "title": "Lamp Seen From The Door",
+              "text": "The machine SHALL show the refill lamp to anyone standing at the kitchen door.",
+              "file": "requirements/01-tank.shall.yaml",
+              "line": 17,
+              "status": "implemented",
+              "effectiveStatus": "implemented",
+              "verify": "inspection"
+            }
+          ]
+        }
+      ],
+      "requirements": {
+        "total": 2,
+        "draft": 0,
+        "approved": 0,
+        "implemented": 2,
+        "verified": 0,
+        "waived": 0,
+        "other": 0
+      },
+      "blocks": [
+        {
+          "type": "paragraph",
+          "inline": [
+            {
+              "type": "text",
+              "text": "The tank is "
+            },
+            {
+              "type": "emphasis",
+              "inline": [
+                {
+                  "type": "text",
+                  "text": "empty"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " once the water is below the pump's intake."
+            }
+          ]
         }
       ]
     }
   ],
   "retired": [
     {
-      "id": "R2",
+      "id": "R4",
       "title": "Water Handling",
       "file": "requirements/01-tank.shall.yaml",
-      "line": 22
+      "line": 27
     }
   ]
 }
@@ -301,12 +405,12 @@ context, marked `"context": true`.
 ```json
 {
   "version": "dm7japskbab4.1",
-  "id": "R1.1",
+  "id": "R3.1.1",
   "kind": "requirement",
   "title": "Lamp Seen From The Door",
   "text": "The machine SHALL show the refill lamp to anyone standing at the kitchen door.",
   "file": "requirements/01-tank.shall.yaml",
-  "line": 12,
+  "line": 17,
   "status": "implemented",
   "effectiveStatus": "implemented",
   "verify": "inspection"
@@ -317,12 +421,12 @@ A retired id is answered with 404, the error, and the entry that retired it:
 
 ```json
 {
-  "error": "R2 was retired at requirements/01-tank.shall.yaml:22.",
+  "error": "R4 was retired at requirements/01-tank.shall.yaml:27.",
   "retired": {
-    "id": "R2",
+    "id": "R4",
     "title": "Water Handling",
     "file": "requirements/01-tank.shall.yaml",
-    "line": 22
+    "line": 27
   }
 }
 ```
@@ -338,10 +442,10 @@ capitals. The answer is always 200; a `message` says why an id names no item.
 {
   "version": "dm7japskbab4.1",
   "ref": {
-    "id": "r1",
+    "id": "r3.1",
     "state": "item",
     "set": "coffee",
-    "itemId": "R1",
+    "itemId": "R3.1",
     "title": "Refill Lamp",
     "file": "requirements/01-tank.shall.yaml"
   }
@@ -352,12 +456,12 @@ capitals. The answer is always 200; a `message` says why an id names no item.
 {
   "version": "dm7japskbab4.1",
   "ref": {
-    "id": "R2",
+    "id": "R4",
     "state": "retired",
     "set": "coffee",
     "title": "Water Handling"
   },
-  "message": "R2 was retired at requirements/01-tank.shall.yaml:22."
+  "message": "R4 was retired at requirements/01-tank.shall.yaml:27."
 }
 ```
 
@@ -377,7 +481,7 @@ nothing is found, `message` says why.
   "results": [
     {
       "match": "title",
-      "id": "R1",
+      "id": "R3.1",
       "state": "item",
       "set": "coffee",
       "title": "Refill Lamp",
@@ -385,7 +489,7 @@ nothing is found, `message` says why.
     },
     {
       "match": "title",
-      "id": "R1.1",
+      "id": "R3.1.1",
       "state": "item",
       "set": "coffee",
       "title": "Lamp Seen From The Door",

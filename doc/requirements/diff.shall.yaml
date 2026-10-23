@@ -1,13 +1,13 @@
 ---
 title: Diff
-requirements:
+items:
   - id: R37
     title: Sets Compared Between Refs
     text: When asked to diff, the tool SHALL compare every set under the given directory, the
       current one by default, as it stands at two git refs.
     rationale: A reviewer judges a change by what it does to the statements, not by the lines
       of YAML it touches.
-    serves: [N2, N5]
+    serves: [N53.1, N55.1]
     status: implemented
     children:
       - id: R37.1
@@ -57,8 +57,9 @@ requirements:
       - id: R37.7
         title: Whitespace Is No Change
         text: The tool SHALL NOT report a value that differs between the refs only in its
-          whitespace.
-        rationale: A text rewrapped says what it said.
+          whitespace, unless it is a topic's text whose Markdown then reads as other blocks.
+        rationale: A text rewrapped says what it said. In Markdown, whitespace is also structure,
+          as a blank line divides paragraphs and a line break separates list items.
         status: implemented
   - id: R38
     title: Items Compared By Id
@@ -66,7 +67,7 @@ requirements:
       removed, retired or changed.
     rationale: Ids stay with their statement wherever it moves, so they show what happened to
       it.
-    serves: [N2]
+    serves: [N53.1]
     status: implemented
     children:
       - id: R38.1
@@ -96,7 +97,7 @@ requirements:
     title: Sets, Chapters And Findings Compared
     text: The tool SHALL report the sets, chapters and set-wide fields that differ between the
       refs.
-    serves: [N2]
+    serves: [N53.1]
     status: implemented
     children:
       - id: R39.1
@@ -115,7 +116,7 @@ requirements:
         title: Chapters And The Mission File
         text: The tool SHALL report each chapter added, removed or retitled, naming the mission
           file as such.
-        status: approved
+        status: implemented
       - id: R39.4
         title: Findings Gained And Lost
         text: The tool SHALL report the checker's findings that are new at the head and those
@@ -127,7 +128,7 @@ requirements:
     title: A Diff To Read
     text: The tool SHALL report a diff as text, grouped by set and then by file, with its totals
       last.
-    serves: [N2]
+    serves: [N53.1]
     status: implemented
     children:
       - id: R40.1
@@ -137,9 +138,16 @@ requirements:
         rationale: The marks read without colour and paste into a review, as git diff's word
           diff does.
         status: implemented
+        children:
+          - id: R40.1.1
+            title: Whitespace Marked
+            text: When a topic's text changes only in its whitespace, the tool SHALL show the
+              whitespace that changed, a line break as ↵ and any other space as ·.
+            rationale: The words alone would then show nothing changed.
+            status: implemented
       - id: R40.2
         title: A Diff For Scripts
         text: Where JSON output is requested, the tool SHALL print the diff as one JSON document
           holding all the text does, with each changed value whole.
-        serves: [N5]
+        serves: [N55.1]
         status: implemented
