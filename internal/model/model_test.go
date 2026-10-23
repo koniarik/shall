@@ -339,3 +339,26 @@ func mustParse(t *testing.T, src string) *tree.Node {
 	}
 	return n
 }
+
+func TestOnlyRequirementsHaveAnEffectiveStatus(t *testing.T) {
+	t.Attr("verifies", "R26.3")
+	s := parse(t, map[string]string{"c.shall.yaml": `title: C
+items:
+  - id: R1
+    title: A
+    text: t
+    status: waived
+    children:
+      - id: T1.1
+        title: Aside
+        children:
+          - {id: N1.1.1, title: B, text: t, status: hypothesis}
+          - {id: R1.1.2, title: C, text: t}
+`})
+	if got := s.Item("N1.1.1").EffectiveStatus(); got != "hypothesis" {
+		t.Errorf("a need below a waived requirement: effective status %q, want its own, hypothesis", got)
+	}
+	if got := s.Item("R1.1.2").EffectiveStatus(); got != "waived" {
+		t.Errorf("a requirement below a waived one: effective status %q, want waived", got)
+	}
+}

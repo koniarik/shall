@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"strings"
 	"syscall"
 
 	"shall/internal/check"
@@ -176,16 +175,7 @@ func writeJSON(w io.Writer, findings []finding.Finding, nErrors, nWarnings int) 
 
 func writeText(w io.Writer, findings []finding.Finding, nErrors, nWarnings int) {
 	for _, f := range findings {
-		where := f.File
-		if f.Line > 0 {
-			where = fmt.Sprintf("%s:%d", f.File, f.Line)
-		}
-		subject := strings.TrimSpace(f.ID + " " + f.Field)
-		if subject != "" {
-			fmt.Fprintf(w, "%s: %s: %s: %s\n", where, f.Severity, subject, f.Message)
-		} else {
-			fmt.Fprintf(w, "%s: %s: %s\n", where, f.Severity, f.Message)
-		}
+		fmt.Fprintln(w, f)
 	}
 	fmt.Fprintf(w, "%d errors, %d warnings\n", nErrors, nWarnings)
 }

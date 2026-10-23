@@ -44,6 +44,12 @@ func Repo(t *testing.T) string {
 	WriteFile(t, config, "[user]\n\tname = Test\n\temail = test@example.com\n")
 	t.Setenv("GIT_CONFIG_GLOBAL", config)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	// A repository or work tree named in the environment would take the
+	// place of the one made here.
+	for _, k := range []string{"GIT_DIR", "GIT_WORK_TREE"} {
+		t.Setenv(k, "")
+		os.Unsetenv(k)
+	}
 	dir := t.TempDir()
 	Git(t, dir, "init", "-q")
 	return dir

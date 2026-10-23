@@ -89,8 +89,11 @@ var statuses = []string{"draft", "approved", "implemented", "verified"}
 // effective statuses of the requirements nearest below it, through topics,
 // that are not waived. A waived requirement, and every requirement below
 // one, is effectively waived. A status outside the order is returned as
-// written.
+// written, and so is the status of an item of another kind.
 func (it *Item) EffectiveStatus() string {
+	if it.Kind != 'R' {
+		return it.Status()
+	}
 	if it.Waived() {
 		return "waived"
 	}

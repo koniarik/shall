@@ -5,8 +5,6 @@ import (
 	"io"
 	"slices"
 	"strings"
-
-	"shall/internal/finding"
 )
 
 // WriteText writes a diff for people: each set, its set-wide fields, then
@@ -68,10 +66,10 @@ func WriteText(w io.Writer, r *Result) error {
 		if fs := s.Findings; fs != nil {
 			t.line("  findings: %d new, %d gone", len(fs.New), len(fs.Gone))
 			for _, f := range fs.New {
-				t.line("    new: %s", line(f))
+				t.line("    new: %s", f)
 			}
 			for _, f := range fs.Gone {
-				t.line("    gone: %s", line(f))
+				t.line("    gone: %s", f)
 			}
 		}
 	}
@@ -138,17 +136,6 @@ func unless(change, usual string) string {
 		return ""
 	}
 	return ": " + change
-}
-
-func line(f finding.Finding) string {
-	where := f.File
-	if f.Line > 0 {
-		where = fmt.Sprintf("%s:%d", f.File, f.Line)
-	}
-	if subject := strings.TrimSpace(f.ID + " " + f.Field); subject != "" {
-		return fmt.Sprintf("%s: %s: %s: %s", where, f.Severity, subject, f.Message)
-	}
-	return fmt.Sprintf("%s: %s: %s", where, f.Severity, f.Message)
 }
 
 // render writes a value as written for a line of text: a list in brackets,

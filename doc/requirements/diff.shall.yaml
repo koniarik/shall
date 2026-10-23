@@ -37,6 +37,26 @@ items:
             rationale: Those files are in no ref, so reading them from disk would show them added
               in every diff against the working tree.
             status: implemented
+          - id: R37.3.2
+            title: Submodules As Their Files
+            text: The tool SHALL read a submodule at a ref as the files of the commit that ref
+              records for it, taken from the submodule's own repository.
+            rationale: A set kept in a submodule then reads at a ref as it reads on disk, where the
+              submodule's files stand in their place.
+            status: implemented
+            children:
+              - id: R37.3.2.1
+                title: A Submodule Not On Disk
+                text: If a submodule's repository is not on disk, then the tool SHALL read the
+                  submodule as empty.
+                rationale: Its directory on disk is empty too, so both sides read the same.
+                status: implemented
+              - id: R37.3.2.2
+                title: A Commit Not Fetched
+                text: If a submodule's repository lacks the commit a ref records for it, then the
+                  tool SHALL say so and exit with status 2.
+                rationale: Fetching the commit is then the fix, which the message names.
+                status: implemented
       - id: R37.4
         title: When Git Cannot Answer
         text: If git cannot give a ref, then the tool SHALL say why and exit with status 2.
@@ -78,10 +98,11 @@ items:
         status: implemented
       - id: R38.2
         title: Effective Status
-        text: When a requirement's effective status differs between the refs, the tool SHALL
-          report it, even where the requirement's own fields are the same.
+        text: When a requirement's effective status differs between the refs and its own status
+          does not tell the change, the tool SHALL report the effective status.
         rationale: A child going back to draft lowers its parent, which a reviewer wants to see
-          on the parent.
+          on the parent. Where the requirement's own status tells the change, a second line
+          would say it again.
         status: implemented
       - id: R38.3
         title: Moved Between Chapters

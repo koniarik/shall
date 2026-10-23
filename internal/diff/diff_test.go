@@ -278,8 +278,8 @@ func TestRefsAndTheWorkingTree(t *testing.T) {
 	if _, err := Read(doc, tree); err == nil || !strings.HasSuffix(err.Error(), tree+" names no commit of the repository at "+testfile.Git(t, dir, "rev-parse", "--show-toplevel")+": expected commit type, but the object dereferences to tree type") {
 		t.Errorf("a tree: %v, want an error naming it, with git's reason", err)
 	}
-	if _, err := Read(t.TempDir(), "HEAD"); err == nil {
-		t.Error("reading a ref outside a repository gave no error")
+	if _, err := Read(t.TempDir(), "HEAD"); err == nil || !strings.Contains(err.Error(), "not a git repository") {
+		t.Errorf("reading a ref outside a repository: %v, want git's own reason", err)
 	}
 	if _, err := Read(filepath.Join(doc, "a.shall.yaml"), "HEAD"); err == nil || !strings.Contains(err.Error(), "is not a directory") {
 		t.Errorf("reading a file: %v, want an error saying it is not a directory", err)
@@ -403,8 +403,106 @@ func TestATopicsMarkdown(t *testing.T) {
 	}
 }
 
+func TestSubmodulesAsTheirFiles(t *testing.T) {
+	t.Attr("verifies", "R37.3.2")
+	t.Attr("verifies", "R37.3.2.1")
+	t.Attr("verifies", "R37.3.2.2")
+	sub := testfile.Repo(t)
+	testfile.Commit(t, sub, map[string]string{
+		"shall.yaml":         "name: x\nformat: 1\n",
+		"mission.shall.yaml": mission,
+		"a.shall.yaml":       "title: A\nitems:\n" + req("R1", "One", "The tool SHALL work.", ""),
+	})
+	super := testfile.Repo(t)
+	testfile.Commit(t, super, map[string]string{"README": "a superproject\n"})
+	testfile.Git(t, super, "-c", "protocol.file.allow=always", "submodule", "-q", "add", sub, "reqs")
+	first := testfile.Commit(t, super, nil)
+	if r := compare(t, super, "HEAD", ""); r.Changed() {
+		t.Errorf("HEAD against the working tree =\n%s\nwant nothing changed: the submodule reads at HEAD as on disk", text(r))
+	}
+	testfile.Commit(t, filepath.Join(super, "reqs"), map[string]string{"a.shall.yaml": "title: A\nitems:\n" + req("R1", "One", "The tool SHALL work well.", "")})
+	second := testfile.Commit(t, super, nil)
+	if got, want := items(compare(t, super, first, second)), "R1:changed/text"; got != want {
+		t.Errorf("between two commits that record the submodule apart: %s, want %s", got, want)
+	}
+
+	clone := filepath.Join(t.TempDir(), "clone")
+	testfile.Git(t, super, "clone", "-q", super, clone)
+	if results, err := Read(clone, "HEAD"); err != nil || len(results) != 0 {
+		t.Errorf("a submodule not on disk: %d sets, %v; want none and no error, as on disk", len(results), err)
+	}
+
+	testfile.Git(t, super, "update-index", "--cacheinfo", "160000,1234567890123456789012345678901234567890,reqs")
+	testfile.Git(t, super, "commit", "-q", "-m", "a commit the submodule lacks")
+	if _, err := Read(super, "HEAD"); err == nil || !strings.Contains(err.Error(), "submodule reqs: commit 1234567890123456789012345678901234567890 is not in its repository") {
+		t.Errorf("a commit not fetched: %v, want an error saying so", err)
+	}
+}
+
+func TestAChangeInFindingsAlone(t *testing.T) {
+	t.Attr("verifies", "R39.4")
+	dir := testfile.Repo(t)
+	chapter := "title: A\nitems:\n" + req("R1", "One", "The tool SHALL work.", "")
+	base := testfile.Commit(t, dir, map[string]string{"shall.yaml": "name: x\nformat: 1\n", "mission.shall.yaml": mission, "a.shall.yaml": chapter})
+	head := testfile.Commit(t, dir, map[string]string{"a.shall.yaml": chapter + "colour: red\n"})
+	r := compare(t, dir, base, head)
+	if len(r.Sets) != 1 || r.Sets[0].Findings == nil || len(r.Sets[0].Findings.New) != 1 || len(r.Sets[0].Items) != 0 || len(r.Sets[0].Fields) != 0 {
+		t.Errorf("diff =\n%s\nwant the set reported for the one finding it gained, and nothing else", text(r))
+	}
+}
+
+func TestEveryFieldOfTheManifest(t *testing.T) {
+	t.Attr("verifies", "R39.2")
+	dir := testfile.Repo(t)
+	base := testfile.Commit(t, dir, map[string]string{"shall.yaml": "name: x\nformat: 1\n", "mission.shall.yaml": mission})
+	head := testfile.Commit(t, dir, map[string]string{"shall.yaml": "name: x\nformat: 1\npath: .\n"})
+	r := compare(t, dir, base, head)
+	if len(r.Sets) != 1 || len(r.Sets[0].Fields) != 1 || r.Sets[0].Fields[0].Field != "path" || r.Sets[0].Fields[0].New != "." {
+		t.Errorf("diff =\n%s\nwant the manifest's path alone, set to .", text(r))
+	}
+}
+
+func TestItemsGoneWithWhatHeldThem(t *testing.T) {
+	t.Attr("verifies", "R38")
+	t.Attr("verifies", "R38.1")
+	t.Attr("verifies", "R39.3")
+	dir := testfile.Repo(t)
+	base := testfile.Commit(t, dir, map[string]string{
+		"shall.yaml":         "name: x\nformat: 1\n",
+		"mission.shall.yaml": mission,
+		"a.shall.yaml": "title: A\nitems:\n" + req("R1", "One", "The tool SHALL work.", ", rationale: because") +
+			"  - id: R2\n    title: Two\n    text: The tool SHALL do two.\n    serves: [N92.1]\n    status: draft\n" +
+			"    children:\n      - {id: R2.1, title: Part, text: The tool SHALL do part of two.}\n",
+		"c.shall.yaml": "title: C\nitems:\n" + req("R5", "Five", "The tool SHALL do five.", ""),
+	})
+	head := testfile.Commit(t, dir, map[string]string{
+		"a.shall.yaml": "title: A\nitems:\n" + req("R1", "One", "The tool SHALL work.", ", verify: inspection") + "retired:\n  - {id: R2, title: Two}\n",
+	}, "c.shall.yaml")
+	r := compare(t, dir, base, head)
+	if got, want := items(r), "R1:changed/verify/rationale R2:retired R2.1:retired R5:removed"; got != want {
+		t.Errorf("items = %s, want %s: the fields the head writes first, a child retired with its parent", got, want)
+	}
+	if got, want := text(r), "  c.shall.yaml: chapter removed\n    R5 Five: removed\n"; !strings.Contains(got, want) {
+		t.Errorf("text =\n%s\nwant it to hold %q", got, want)
+	}
+}
+
+func TestNoTemporaryFileStays(t *testing.T) {
+	dir := testfile.Repo(t)
+	base := testfile.Commit(t, dir, map[string]string{"shall.yaml": "name: x\nformat: 1\n", "mission.shall.yaml": mission,
+		"a.shall.yaml": "title: A\nitems:\n" + req("R1", "One", "The tool SHALL work.", "")})
+	head := testfile.Commit(t, dir, map[string]string{"a.shall.yaml": "title: A\nitems:\n" + req("R1", "One", "The tool SHALL work well.", "")})
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	if got := text(compare(t, dir, base, head)); !strings.Contains(got, "{+work well.+}") {
+		t.Fatalf("text =\n%s\nwant the words marked, so that git compared them", got)
+	}
+	if left, err := os.ReadDir(tmp); err != nil || len(left) != 0 {
+		t.Errorf("left in the temporary directory: %v, %v; want nothing", left, err)
+	}
+}
+
 func TestNothingChanged(t *testing.T) {
-	t.Attr("verifies", "R37.5")
 	dir := testfile.Repo(t)
 	c := testfile.Commit(t, dir, map[string]string{"shall.yaml": "name: x\nformat: 1\n", "mission.shall.yaml": mission})
 	r := compare(t, dir, c, "")

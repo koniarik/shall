@@ -368,6 +368,7 @@ func TestOneHookToAdopt(t *testing.T) {
 }
 
 func TestDiffExitStatus(t *testing.T) {
+	t.Attr("verifies", "R37.1")
 	t.Attr("verifies", "R37.4")
 	t.Attr("verifies", "R37.5")
 	t.Attr("verifies", "R37.6")
@@ -394,6 +395,13 @@ func TestDiffExitStatus(t *testing.T) {
 	if code, out := shall(t, "diff", t.TempDir()); code != 2 || !strings.Contains(out, "shall:") {
 		t.Errorf("diff outside a repository = exit %d %q, want 2 and why", code, out)
 	}
+	testfile.Commit(t, dir, nil)
+	if code, out := shall(t, "diff", "-base", "HEAD~1", "-head", "HEAD", dir); code != 1 || !strings.Contains(out, "R1 One: added") {
+		t.Errorf("diff -base HEAD~1 -head HEAD = exit %d %q, want 1 and R1 added", code, out)
+	}
+	if code, out := shall(t, "diff", "-base", "HEAD", "-head", "HEAD", dir); code != 0 || out != "nothing changed\n" {
+		t.Errorf("diff -base HEAD -head HEAD = exit %d %q, want 0 and that nothing changed", code, out)
+	}
 }
 
 // snapshot copies the files of this repository, as they stand on disk, into
@@ -410,7 +418,10 @@ func snapshot(t *testing.T, git string, env []string) string {
 		if err != nil {
 			return err
 		}
-		rel, _ := filepath.Rel(src, path)
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
 		if d.IsDir() && d.Name() == ".git" {
 			return filepath.SkipDir
 		}

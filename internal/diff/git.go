@@ -22,8 +22,8 @@ import (
 // Read reads the sets under dir as they stand at ref, or as they stand on
 // disk when ref is empty, and checks them. A directory that is not there at
 // ref holds no set. A ref is read from git's object store, every file in
-// its tree that the checker reads, so a set whose path leads elsewhere in
-// the repository reads the same at a ref as on disk. A directory missing
+// its tree that the checker reads, its submodules' included, so a set whose
+// path leads elsewhere in the repository reads the same at a ref as on disk. A directory missing
 // from disk is looked up in the repository from the nearest one still
 // there.
 func Read(dir, ref string) ([]*check.Result, error) {
@@ -65,28 +65,21 @@ func Read(dir, ref string) ([]*check.Result, error) {
 		}
 		return nil, errors.New(msg)
 	}
-	// Every file the checker reads ends in the manifest's name: the
-	// manifests, and the set files named *.shall.yaml.
-	names, err := git(top, "ls-tree", "-r", "-z", "--name-only", commit)
+	gitDir, err := git(near, "rev-parse", "--absolute-git-dir")
 	if err != nil {
 		return nil, err
-	}
-	var read []string
-	for _, name := range strings.Split(names, "\x00") {
-		if strings.HasSuffix(name, set.ManifestName) {
-			read = append(read, name)
-		}
-	}
-	if len(read) == 0 {
-		return nil, nil
 	}
 	tmp, err := os.MkdirTemp("", "shall-diff-")
 	if err != nil {
 		return nil, err
 	}
 	defer os.RemoveAll(tmp)
-	if err := extract(top, commit, read, tmp); err != nil {
+	n, err := readTree(gitDir, commit, top, "", tmp)
+	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", ref, err)
+	}
+	if n == 0 {
+		return nil, nil
 	}
 	root := filepath.Join(tmp, filepath.FromSlash(prefix))
 	if _, err := os.Stat(root); errors.Is(err, fs.ErrNotExist) {
@@ -122,6 +115,71 @@ func nearest(dir string) (string, string, error) {
 	return near, filepath.ToSlash(missing), nil
 }
 
+// readTree writes under dir, at the path at, every file of a commit of the
+// repository at gitDir that the checker reads: those whose names end in the
+// manifest's name, the manifests and the set files named *.shall.yaml. A
+// submodule is read the same way, as the commit the tree records for it,
+// from its own repository; worktree is where the tree stands on disk, beside
+// which that repository is found. It returns how many files it wrote.
+func readTree(gitDir, commit, worktree, at, dir string) (int, error) {
+	listed, err := gitIn(gitDir, "ls-tree", "-r", "-z", commit)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	var names []string
+	for _, rec := range strings.Split(listed, "\x00") {
+		meta, name, ok := strings.Cut(rec, "\t")
+		f := strings.Fields(meta)
+		switch {
+		case !ok || len(f) != 3:
+		case f[1] == "commit":
+			sub := submodule(gitDir, worktree, name)
+			if sub == "" {
+				continue
+			}
+			where := path.Join(at, name)
+			if _, err := gitIn(sub, "cat-file", "-e", f[2]+"^{commit}"); err != nil {
+				return 0, fmt.Errorf("submodule %s: commit %s is not in its repository at %s; fetch it", where, f[2], sub)
+			}
+			m, err := readTree(sub, f[2], filepath.Join(worktree, filepath.FromSlash(name)), where, dir)
+			if err != nil {
+				return 0, err
+			}
+			n += m
+		case strings.HasSuffix(name, set.ManifestName):
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return n, nil
+	}
+	return n + len(names), extract(gitDir, commit, names, dir, at)
+}
+
+// submodule returns the repository of the submodule at name in a tree whose
+// work tree stands at worktree, or "" when it is not on disk: the work
+// tree's checkout of it, or else the copy git keeps among the modules of the
+// repository at gitDir.
+func submodule(gitDir, worktree, name string) string {
+	p := filepath.Join(worktree, filepath.FromSlash(name))
+	if _, err := os.Stat(filepath.Join(p, ".git")); err == nil {
+		if d, err := git(p, "rev-parse", "--absolute-git-dir"); err == nil {
+			return d
+		}
+	}
+	m := filepath.Join(gitDir, "modules", filepath.FromSlash(name))
+	if st, err := os.Stat(m); err == nil && st.IsDir() {
+		return m
+	}
+	return ""
+}
+
+// gitIn runs git on the repository at gitDir, like git.
+func gitIn(gitDir string, args ...string) (string, error) {
+	return git(".", append([]string{"--git-dir=" + gitDir}, args...)...)
+}
+
 // git runs git in dir and returns what it printed, trimmed, or an error
 // holding what it said.
 func git(dir string, args ...string) (string, error) {
@@ -145,17 +203,17 @@ func gitSaid(dir string, args ...string) (out, said string, err error) {
 	return strings.TrimSpace(string(stdout)), said, nil
 }
 
-// extract writes each named file of commit under dir, its content as
-// committed. A link is read through, as on disk, while it leads to a file
-// of commit's tree; one that does not is written as a link that fails as
-// it fails on disk.
-func extract(top, commit string, names []string, dir string) error {
+// extract writes each named file of a commit of the repository at gitDir
+// under dir, at the path at, its content as committed. A link is read
+// through, as on disk, while it leads to a file of commit's tree; one that
+// does not is written as a link that fails as it fails on disk.
+func extract(gitDir, commit string, names []string, dir, at string) error {
 	for _, name := range names {
 		if strings.Contains(name, "\n") {
 			return fmt.Errorf("%q holds a line break, which git cat-file cannot be asked for", name)
 		}
 	}
-	cmd := exec.Command("git", "-C", top, "cat-file", "--batch", "--follow-symlinks")
+	cmd := exec.Command("git", "--git-dir="+gitDir, "cat-file", "--batch", "--follow-symlinks")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	in, err := cmd.StdinPipe()
@@ -186,9 +244,9 @@ func extract(top, commit string, names []string, dir string) error {
 		switch {
 		case err != nil:
 		case kind == "blob":
-			err = place(dir, name, content)
+			err = place(dir, path.Join(at, name), content)
 		case kind != "missing" && kind != "commit" && kind != "tag":
-			err = broken(dir, name, kind)
+			err = broken(dir, path.Join(at, name), kind)
 		}
 		if err != nil {
 			failed = err

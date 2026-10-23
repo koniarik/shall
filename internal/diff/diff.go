@@ -173,6 +173,8 @@ type side struct {
 	files map[string]*model.File
 }
 
+// sideOf returns a set's side. Of two items with one path, the first read
+// is compared, as everywhere else; the checker reports the second.
 func sideOf(res *check.Result) side {
 	s := side{res: res, items: map[string]*model.Item{}, files: map[string]*model.File{}}
 	if res == nil || res.Set == nil {
@@ -290,7 +292,7 @@ func compareItems(b, h side) []ItemChange {
 		// The effective status is reported where it says more than the
 		// written one, as when a child lowers its parent.
 		oldEffective, newEffective := old.EffectiveStatus(), it.EffectiveStatus()
-		if it.Kind == 'R' && oldEffective != newEffective && (oldEffective != old.Status() || newEffective != it.Status()) {
+		if oldEffective != newEffective && (oldEffective != old.Status() || newEffective != it.Status()) {
 			c.EffectiveStatus = &Values{Old: nonEmpty(oldEffective), New: nonEmpty(newEffective)}
 		}
 		if c.MovedFrom != "" || len(c.Fields) > 0 || c.EffectiveStatus != nil {
