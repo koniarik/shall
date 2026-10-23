@@ -16,11 +16,13 @@ import (
 	"syscall"
 
 	"shall/internal/check"
+	"shall/internal/diff"
 	"shall/internal/finding"
 	"shall/internal/serve"
 )
 
 const usage = `usage: shall check [-json] [-warnings-as-errors] [directory]
+       shall diff [-json] [-base ref] [-head ref] [directory]
        shall serve [-addr host:port] [directory]`
 
 func main() {
@@ -35,6 +37,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		switch args[0] {
 		case "check":
 			return runCheck(args[1:], stdout, stderr)
+		case "diff":
+			return runDiff(args[1:], stdout, stderr)
 		case "serve":
 			return runServe(ctx, args[1:], stdout, stderr)
 		}
@@ -53,6 +57,38 @@ func directory(flags *flag.FlagSet, stderr io.Writer) (string, bool) {
 	}
 	fmt.Fprintln(stderr, usage)
 	return "", false
+}
+
+func runDiff(args []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("diff", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	asJSON := flags.Bool("json", false, "print the diff as one JSON document")
+	base := flags.String("base", "HEAD", "the ref to compare from")
+	head := flags.String("head", "", "the ref to compare to; the working tree when empty")
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	root, ok := directory(flags, stderr)
+	if !ok {
+		return 2
+	}
+	r, err := diff.Between(root, *base, *head)
+	if err != nil {
+		fmt.Fprintln(stderr, "shall:", err)
+		return 2
+	}
+	if *asJSON {
+		enc := json.NewEncoder(stdout)
+		enc.SetIndent("", "  ")
+		enc.Encode(r)
+	} else if err := diff.WriteText(stdout, r); err != nil {
+		fmt.Fprintln(stderr, "shall:", err)
+		return 2
+	}
+	if r.Changed() {
+		return 1
+	}
+	return 0
 }
 
 func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) int {

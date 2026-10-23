@@ -2,12 +2,12 @@
 
 A **set** states why one product exists and what it promises: the results it
 aims for, who it serves, what they need, and the requirements that answer
-those needs. A set is a manifest and the files it points to, kept in git like
-code.
+those needs, with topics that explain what a reader needs to know to follow
+them. A set is a manifest and the files it points to, kept in git like code.
 
 Three conventions hold throughout. A field is required unless marked
 optional. A field that names other items holds a list of ids, except
-`stakeholder`, which holds one. A field this document does not define is an
+`mirrors`, which holds one. A field this document does not define is an
 error.
 
 ## Manifest
@@ -42,65 +42,72 @@ depends:
 ## Files
 
 Every file under `path`, in any subdirectory, whose name ends in `.shall.yaml`
-belongs to the set.
+belongs to the set. Each file is a **chapter**, and holds items of any kind,
+which read in the order they are written.
+
+| Field | Meaning |
+|---|---|
+| `title` | The chapter's title. |
+| `items` | Optional. The chapter's top-level items. |
+| `retired` | Optional. Retired top-level items of this chapter. |
 
 **The mission file**, `mission.shall.yaml`, exists exactly once in every set,
-a standard that products depend on included, and holds why the product
-exists.
+a standard that products depend on included. It is a chapter that also holds
+why the product exists:
 
 | Field | Meaning |
 |---|---|
 | `mission` | One statement of why the product exists. |
 | `ranking` | Optional. Objective ids, highest first. When two objectives conflict, the one listed earlier wins; objectives not listed are not ranked. |
-| `objectives`, `stakeholders`, `needs` | Optional. The items of those kinds, which appear in no other file. |
-| `retired` | Optional. Retired top-level items of those kinds. |
-
-**Chapter files** are every other file. They hold the requirements, which
-read in the order they are written.
-
-| Field | Meaning |
-|---|---|
-| `title` | The chapter's title. |
-| `requirements` | The chapter's top-level requirements. |
-| `retired` | Optional. Retired top-level requirements of this chapter. |
 
 ## Ids
 
-An id is its kind's prefix followed by a number, optionally followed by `.`
-and a number, repeated: `O3`, `N3.2`, `R12.1.4`. Numbers start at 1, have no
-leading zeros, and need not be consecutive. A top-level id has no `.`; a
-child's id is its parent's id followed by `.` and a number.
+An id is a letter, the prefix of its item's kind, followed by a path of
+numbers joined by `.`: `O3`, `N3.2`, `T12.1.4`. The path places the item in
+its set's tree. A top-level item's path is one number; a child's path is its
+parent's path followed by `.` and a number, whatever the parent's kind.
+Numbers start at 1, have no leading zeros, and need not be consecutive.
 
-Ids are unique within a set and never reused. An id does not depend on the
-file its item lives in, so a requirement can move between chapters unchanged.
-Moving a child to another parent, or to the top level, changes its id: the
-old id is retired and the item takes a new one.
+The path alone names an item. The children of one parent count together,
+whatever their kinds, and so do the top-level items of all the set's
+chapters, so no two items of a set share a path. A reference whose letter is
+not the kind of the item its path names is an error.
+
+An id does not depend on the chapter its item lives in, so a top-level item
+can move between chapters unchanged. Moving an item to another parent, from
+the top level under a parent, or from a parent to the top level, changes its
+id: the old id is retired and the item takes a new one. A retired path never
+returns, under any letter.
 
 ## Retiring an item
 
 An item that is no longer wanted is retired rather than deleted without
 trace. Its entry goes into the `retired` list of the place that held it: a
-file for a top-level item, its parent item for a child. An entry has the
+chapter for a top-level item, its parent item for a child. An entry has the
 item's `id` and the `title` it had; git holds the rest of its history.
 
-Retiring an item retires its children with it. A retired id never returns
-anywhere in the set. A reference to a retired id is a warning, so that a large
-change can land in several steps.
+Retiring an item retires its children with it. A reference to a retired id is
+a warning, so that a large change can land in several steps.
 
 ## Items
 
-Every item has these fields:
+The items of a set form trees. Every item has these fields:
 
 | Field | Meaning |
 |---|---|
 | `id` | Its id, with its kind's prefix. |
 | `title` | A short name, shown wherever the item is listed. |
 | `text` | What the item says. Each kind below gives `text` its meaning. |
-| `children` | Optional. Items of the same kind that refine this one. |
-| `mirrors` | Optional. An item of the same kind in a set this one depends on, named `name/id`, that this item stands for here. |
-| `notes` | Optional. A list of free-text notes for whoever reads the item. Nothing checks or interprets them. |
+| `children` | Optional. The items under this one. |
 | `links` | Optional. A list of links to things outside the set, such as the evidence that a need is validated or a requirement verified. |
 | `retired` | Optional. Retired children of this item. |
+
+Every item but a topic also has these:
+
+| Field | Meaning |
+|---|---|
+| `mirrors` | Optional. An item of the same kind in a set this one depends on, named `name/id`, that this item stands for here. |
+| `notes` | Optional. A list of free-text notes for whoever reads the item. Nothing checks or interprets them. |
 
 A link names its kind by its key, and may carry a `title`. Format 1 has one
 kind, `url`:
@@ -111,21 +118,27 @@ links:
     title: Tank tests on hardware revision C
 ```
 
-**Mirrors.** Every item of every set this one depends on applies here too,
-and each has exactly one mirror in this set. An item without a mirror is a
-warning, unless the mirror of its parent is waived; two mirrors of the same
-item are an error. Only requirements can be waived: the objectives,
-stakeholders and needs of a set this one depends on always apply. A mirror's `title` is the title of the item it mirrors,
-and a different title is a warning. Its `text` and its other fields say what
-the item means in this set's own context.
+**Nesting.** An item may hold items of its own kind, which refine it, and
+topics. A topic may hold items of every kind. A stakeholder class may also
+hold needs: the needs the class has. No kind holds another otherwise.
 
-A child takes over the fields of its parent that its kind lists as
-inherited, unless it sets them itself; a value the child sets replaces the
-inherited one whole. `id`, `title`, `text`, `children`, `status`, `mirrors`,
-`notes`, `links` and `retired` are never inherited, since they describe the
-item itself.
+**Inheritance.** A child takes over the fields its kind lists as inherited
+from the nearest item above it of its own kind, unless it sets them itself; a
+value the child sets replaces the inherited one whole. Topics in between are
+passed over and pass nothing on. `id`, `title`, `text`, `children`, `status`,
+`mirrors`, `notes`, `links` and `retired` are never inherited, since they
+describe the item itself.
 
-### Objective — `objectives`, prefix `O`
+**Mirrors.** Every item of every set this one depends on, topics aside,
+applies here too, and each has exactly one mirror in this set. An item without
+a mirror is a warning, unless the mirror of its parent is waived; two mirrors
+of the same item are an error. Only requirements can be waived: the
+objectives, stakeholders and needs of a set this one depends on always apply.
+A mirror's `title` is the title of the item it mirrors, and a different title
+is a warning. Its `text` and its other fields say what the item means in this
+set's own context.
+
+### Objective — prefix `O`
 
 A result the product exists to achieve. Objectives are what needs are judged
 against, and the ranking settles conflicts between them.
@@ -150,7 +163,7 @@ Inherited by children: `measure`.
   text: The machine is better.
 ```
 
-### Stakeholder class — `stakeholders`, prefix `S`
+### Stakeholder class — prefix `S`
 
 A role whose interest the product serves, such as a tester or an operator. A
 class is a role, not a person.
@@ -173,39 +186,46 @@ Inherited by children: nothing.
   text: Asked for the machine.
 ```
 
-### Need — `needs`, prefix `N`
+### Need — prefix `N`
 
-Something one stakeholder class needs from the product, in that class's own
-terms. Needs are where requirements come from.
+Something stakeholder classes need from the product, in the terms of a class
+that has it. Needs are where requirements come from.
+
+A need's classes are the class it sits under, through topics, and those its
+`stakeholders` field names. A need is usually held by the one class that has
+it; a need that several classes share can sit under one of them and name the
+others, or sit under none and name them all.
 
 | Field | Meaning |
 |---|---|
 | `text` | The need, as the class would say it. |
-| `stakeholder` | The class that has it. |
+| `stakeholders` | Optional. The classes that have it, besides the one it sits under. A need with no class either way is a warning, so that a need can be written before its classes are placed. |
 | `serves` | The objectives it advances. The list may also hold the word `mission`, for a need that serves the mission directly. |
 | `status` | `hypothesis` until real use confirms it, then `validated`. A need found to be wrong is retired. |
 
-Inherited by children: `stakeholder`, `serves`.
+Inherited by children: `stakeholders`, `serves`.
 
 ```yaml
 # good: the user's words, with no solution in them
-- id: N1
-  title: Know Before Brewing
-  stakeholder: S1
-  text: Know before I brew that the tank needs water.
-  serves: [O1]
-  status: hypothesis
+- id: S1
+  title: Office User
+  text: Wants coffee without having to look after the machine.
+  children:
+    - id: N1.1
+      title: Know Before Brewing
+      text: Know before I brew that the tank needs water.
+      serves: [O1]
+      status: hypothesis
 
 # bad: a design in the system's words; the user never asked for a float
-- id: N2
-  title: Float Sensor
-  stakeholder: S1
-  text: The tank has a float sensor.
-  serves: [O1]
-  status: hypothesis
+    - id: N1.2
+      title: Float Sensor
+      text: The tank has a float sensor.
+      serves: [O1]
+      status: hypothesis
 ```
 
-### Requirement — `requirements`, prefix `R`
+### Requirement — prefix `R`
 
 One promise the product keeps, specific enough to verify.
 
@@ -219,13 +239,13 @@ One promise the product keeps, specific enough to verify.
 
 Inherited by children: `serves`, `rationale`, `verify`.
 
-An item's **effective status** is the lowest of its own `status` and the
-effective status of its children, in the order `draft`, `approved`,
-`implemented`, `verified`. A requirement written as `verified` with one child
-still `implemented` is effectively `implemented`; both are shown, and the
-difference is not a fault. A `waived` requirement is effectively waived
-together with all its children, which need no status of their own, and a
-waived child does not lower its parent.
+A requirement's **effective status** is the lowest of its own `status` and the
+effective status of the requirements nearest below it, through topics, in the
+order `draft`, `approved`, `implemented`, `verified`. A requirement written as
+`verified` with one child still `implemented` is effectively `implemented`;
+both are shown, and the difference is not a fault. A `waived` requirement is
+effectively waived together with every requirement below it, which need no
+status of their own, and a waived requirement does not lower the one above it.
 
 **Keywords.** RFC 2119 defines words that carry obligation when written in
 capitals: MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT,
@@ -263,19 +283,65 @@ method. A requirement in none of them is a warning.
   status: draft
 ```
 
+### Topic — prefix `T`
+
+What a reader needs to know to follow the items under it and after it: the
+terms they use, the design they belong to, how its parts behave. A topic
+explains and groups; it promises nothing and has no status.
+
+| Field | Meaning |
+|---|---|
+| `text` | Optional. The explanation, in Markdown. Without it, the topic is a heading over its children. |
+
+Inherited by children: nothing.
+
+A topic's text is Markdown as CommonMark reads it, with GitHub's tables:
+headings, paragraphs, lists, tables, code blocks, emphasis, inline code and
+links. HTML in it is shown as text. A code block marked `mermaid` is a
+diagram, such as a state machine or a sequence of messages, drawn as Mermaid
+draws it; nothing checks a diagram, so a mistake in one shows where it is
+drawn. Every other field of every item is plain text.
+
+````yaml
+# good: the terms the requirements below use, before they use them
+- id: T3
+  title: Water Level
+  text: |
+    The tank is *empty* once the water is below the pump's intake, and *low*
+    when less than one brew is left.
+
+    ```mermaid
+    stateDiagram-v2
+      Full --> Low: brews
+      Low --> Empty: a brew
+      Empty --> Full: refill
+    ```
+  children:
+    - id: R3.1
+      title: Refill Lamp
+      text: When the tank becomes empty, the machine SHALL light the refill lamp.
+      serves: [N1.1]
+      status: approved
+
+# bad: a promise dressed as an explanation, which nothing traces or verifies
+- id: T4
+  title: Lid
+  text: The lid must stay locked while a brew runs.
+````
+
 ## References
 
 | Field | On | Names |
 |---|---|---|
 | `serves` | need | objectives, and the word `mission` |
-| `stakeholder` | need | one stakeholder class |
+| `stakeholders` | need | stakeholder classes |
 | `serves` | requirement | needs or requirements |
-| `mirrors` | any item | one item of the same kind in a set this one depends on |
+| `mirrors` | any item but a topic | one item of the same kind in a set this one depends on |
 
-An item of another set is named `name/id`, where `name` is the name the
-manifest gives that set under `depends`. A standard that every product of a
-company or a department meets is a set of its own, which each product depends
-on and mirrors.
+No field names a topic. An item of another set is named `name/id`, where
+`name` is the name the manifest gives that set under `depends`. A standard
+that every product of a company or a department meets is a set of its own,
+which each product depends on and mirrors.
 
 ## Errors and warnings
 
@@ -297,52 +363,56 @@ path: requirements
 
 ```yaml
 # requirements/mission.shall.yaml
+title: Why The Machine Exists
 mission: Coffee in the office without anyone looking after the machine.
 ranking: [O1]
-objectives:
+items:
   - id: O1
     title: No Dry Brews
     text: No brew starts while the water tank is empty.
     measure: brews started on an empty tank, per thousand brews.
-stakeholders:
-  - id: S1
+  - id: S2
     title: Office User
     text: Wants coffee without having to look after the machine.
-needs:
-  - id: N1
-    title: Know Before Brewing
-    stakeholder: S1
-    text: Know before I brew that the tank needs water.
-    serves: [O1]
-    status: validated
-    notes:
-      - Heard from three users in the first week of the trial.
+    children:
+      - id: N2.1
+        title: Know Before Brewing
+        text: Know before I brew that the tank needs water.
+        serves: [O1]
+        status: validated
+        notes:
+          - Heard from three users in the first week of the trial.
 ```
 
 ```yaml
 # requirements/01-tank.shall.yaml
 title: Water Tank
-requirements:
-  - id: R1
-    title: Refill Lamp
-    text: When the tank becomes empty, the machine SHALL light the refill lamp.
-    serves: [N1]
-    status: implemented
-    links:
-      - url: https://ci.example.com/runs/4711
-        title: Tank tests on hardware revision C
+items:
+  - id: T3
+    title: Water Level
+    text: |
+      The tank is *empty* once the water is below the pump's intake.
     children:
-      - id: R1.1
-        title: Lamp Seen From The Door
-        text: The machine SHALL show the refill lamp to anyone standing at the
-          kitchen door.
-        verify: inspection
+      - id: R3.1
+        title: Refill Lamp
+        text: When the tank becomes empty, the machine SHALL light the refill lamp.
+        serves: [N2.1]
         status: implemented
-    retired:
-      - id: R1.2
-        title: Refill Beep
+        links:
+          - url: https://ci.example.com/runs/4711
+            title: Tank tests on hardware revision C
+        children:
+          - id: R3.1.1
+            title: Lamp Seen From The Door
+            text: The machine SHALL show the refill lamp to anyone standing at the
+              kitchen door.
+            verify: inspection
+            status: implemented
+        retired:
+          - id: R3.1.2
+            title: Refill Beep
 retired:
-  - id: R2
+  - id: R4
     title: Water Handling
 ```
 

@@ -58,6 +58,17 @@ The exit status is 0 when nothing failed, 1 when the check found errors, and
 2 when the command was used wrongly.
 
 ```text
+shall diff [-json] [-base ref] [-head ref] [directory]
+```
+
+`shall diff` compares the sets under the directory between two git refs,
+`HEAD` and the working tree by default, item by item: what was added,
+removed, retired or changed, field by field with the changed words marked
+`[-old-]{+new+}`, and the checker's findings gained and lost. It exits with 0
+when nothing changed, 1 when something did and 2 when it cannot compare;
+`-json` prints the same for scripts, as [doc/diff.md](doc/diff.md) describes.
+
+```text
 shall serve [-addr host:port] [directory]
 ```
 

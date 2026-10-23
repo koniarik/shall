@@ -126,15 +126,15 @@ requirements:
         status: implemented
       - id: R26.11
         title: Outline
-        text: The server SHALL show beside each document an outline of the mission's parts and of
-          the chapters, each entry a link to its place.
+        text: The server SHALL show beside each document an outline of its chapters, each entry
+          a link to its place.
         rationale: A reader of a large set then moves between its parts in one step.
         status: implemented
         children:
           - id: R26.11.1
             title: Unfolded Chapters Outlined
             text: While a chapter is unfolded, the server SHALL list its top-level items under it
-              in the outline.
+              in the outline, and under each topic listed the topics it holds.
             rationale: The outline then lists what the page holds and no more, so a folded
               chapter still sends none of its items.
             status: implemented
@@ -184,6 +184,20 @@ requirements:
               the filter.
             rationale: A link or a search result then always reaches its item.
             status: implemented
+      - id: R26.16
+        title: Topics Drawn
+        text: The server SHALL show a topic's text with its headings, lists, tables, code,
+          emphasis and links laid out, and each of its diagrams drawn.
+        serves: [N15]
+        status: approved
+      - id: R26.17
+        title: Progress Per Topic
+        text: The server SHALL show beside each topic how many of the requirements below it stand
+          at each effective status.
+        rationale: A topic has no status of its own. The count tells how far its part of the set
+          has got, where the lowest status alone would make one draft among many verified
+          requirements read as the whole.
+        status: approved
   - id: R27
     title: Ids Are Links
     text: The server SHALL show every id that a field names, and that names an item the server

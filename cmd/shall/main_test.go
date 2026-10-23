@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -328,10 +329,6 @@ func TestOneHookToAdopt(t *testing.T) {
 	if dir, err := exec.Command(goTool, "list", "-m", "-f", "{{.Dir}}", "github.com/goccy/go-yaml").Output(); err != nil || strings.TrimSpace(string(dir)) == "" {
 		t.Skip("the module cache lacks goccy/go-yaml; build shall once first")
 	}
-	repo, err := filepath.Abs("../..")
-	if err != nil {
-		t.Fatal(err)
-	}
 	home := t.TempDir()
 	gitConfig := filepath.Join(home, "gitconfig")
 	if err := os.WriteFile(gitConfig, []byte("[user]\n\tname = Test\n\temail = test@example.com\n"), 0o644); err != nil {
@@ -341,6 +338,7 @@ func TestOneHookToAdopt(t *testing.T) {
 		"GOMODCACHE="+strings.TrimSpace(string(cache)), "GOPROXY=off", "GOFLAGS=",
 		"PRE_COMMIT_HOME="+filepath.Join(home, "pre-commit"),
 		"GIT_CONFIG_GLOBAL="+gitConfig, "GIT_CONFIG_NOSYSTEM=1")
+	repo := snapshot(t, git, env)
 	dir := testfile.Write(t, map[string]string{"shall.yaml": manifest, "mission.shall.yaml": mission})
 	in := func(name string, args ...string) (string, error) {
 		cmd := exec.Command(name, args...)
@@ -364,4 +362,74 @@ func TestOneHookToAdopt(t *testing.T) {
 	if out, err := in(preCommit, "try-repo", repo, "shall-check", "--all-files"); err == nil || !strings.Contains(out, "states no SHALL") {
 		t.Errorf("the hook passed a set with an error: %v\n%s", err, out)
 	}
+}
+
+func TestDiffExitStatus(t *testing.T) {
+	t.Attr("verifies", "R37.4")
+	t.Attr("verifies", "R37.5")
+	t.Attr("verifies", "R37.6")
+	dir := testfile.Repo(t)
+	testfile.Commit(t, dir, map[string]string{"shall.yaml": manifest, "mission.shall.yaml": mission, "doc/a.shall.yaml": "title: A\nrequirements: []\n"})
+	if code, out := shall(t, "diff", dir); code != 0 || out != "nothing changed\n" {
+		t.Errorf("diff with nothing changed = exit %d %q, want 0 and that nothing changed", code, out)
+	}
+	testfile.WriteFile(t, filepath.Join(dir, "c.shall.yaml"), "title: C\nrequirements:\n  - {id: R1, title: One, text: The tool SHALL work., serves: [N1], status: draft}\n")
+	if code, out := shall(t, "diff", dir); code != 1 || !strings.Contains(out, "R1 One: added") {
+		t.Errorf("diff with a new requirement = exit %d %q, want 1 and R1 added", code, out)
+	}
+	code, out := shall(t, "diff", "-json", dir)
+	var r struct{ Totals struct{ Added int } }
+	if err := json.Unmarshal([]byte(out), &r); code != 1 || err != nil || r.Totals.Added != 1 {
+		t.Errorf("diff -json = exit %d, %v, %q; want 1 and one item added", code, err, out)
+	}
+	if code, out := shall(t, "diff", "-base", "no-such-ref", dir); code != 2 || !strings.Contains(out, "no-such-ref names no commit") {
+		t.Errorf("diff from an unknown ref = exit %d %q, want 2 and why", code, out)
+	}
+	if code, out := shall(t, "diff", filepath.Join(dir, "doc")); code != 2 || !strings.Contains(out, "no shall.yaml under "+filepath.Join(dir, "doc")+" at either ref") {
+		t.Errorf("diff of a directory holding only chapters = exit %d %q, want 2 and that it holds no set", code, out)
+	}
+	if code, out := shall(t, "diff", t.TempDir()); code != 2 || !strings.Contains(out, "shall:") {
+		t.Errorf("diff outside a repository = exit %d %q, want 2 and why", code, out)
+	}
+}
+
+// snapshot copies the files of this repository, as they stand on disk, into
+// a new repository of its own and commits them there, so that pre-commit
+// builds the hook from the code on disk whatever git tracks here.
+func snapshot(t *testing.T, git string, env []string) string {
+	t.Helper()
+	src, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dst := t.TempDir()
+	err = filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(src, path)
+		if d.IsDir() && d.Name() == ".git" {
+			return filepath.SkipDir
+		}
+		if d.IsDir() || !d.Type().IsRegular() {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		testfile.WriteFile(t, filepath.Join(dst, rel), string(data))
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"init", "-q"}, {"add", "-A"}, {"commit", "-q", "-m", "snapshot"}} {
+		cmd := exec.Command(git, args...)
+		cmd.Dir, cmd.Env = dst, env
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	return dst
 }

@@ -4,7 +4,7 @@ requirements:
   - id: R19
     title: A Single Go Binary
     text: The tool SHALL be one binary, written in Go, that runs with nothing else installed but
-      git, which diff asks for the files at a ref.
+      git, which diff asks for the files at a ref and for the words that changed.
     rationale: Adopters in a department of embedded engineers then need no runtime, and the same
       binary serves developers, pre-commit and CI. TypeScript was not taken because every machine
       would need Node.js, which refuses to run TypeScript inside node_modules, and npm is
@@ -135,13 +135,15 @@ requirements:
         status: implemented
       - id: R31.2
         title: Script As Written
-        text: The page's JavaScript SHALL be served as written, with no library and no build step.
+        text: The page's JavaScript SHALL be served as written, with no build step and no library
+          but Mermaid, which draws diagrams.
         status: implemented
       - id: R31.3
         title: Text Stays Text
         text: The page's JavaScript SHALL put the text of a set into the page as text, never as
-          markup.
-        rationale: Nothing a file of a set holds can then add markup or script to the page.
+          markup, except the drawing Mermaid makes of a diagram.
+        rationale: Nothing a file of a set holds can then add markup or script to the page. The
+          drawing is markup Mermaid makes itself, at the level R44.1 sets.
         serves: [R7]
         status: implemented
   - id: R32
@@ -208,19 +210,61 @@ requirements:
         status: implemented
   - id: R41
     title: Refs Read Through Git
-    text: The tool SHALL read the files of a ref from an archive of the ref's tree that git
-      makes, and check them as it checks the files on disk.
-    rationale: Every machine that holds a set in git has git, and an archive gives the files
-      exactly as committed. go-git was not taken for being a large dependency; reading git's
-      object store with code of its own for being a large piece of code.
+    text: The tool SHALL read the files of a ref from git's object store, through git, and check
+      them as it checks the files on disk.
+    rationale: Every machine that holds a set in git has git, and its object store gives the
+      files exactly as committed, where an archive leaves out or rewrites those its attributes
+      name. go-git was not taken for being a large dependency; reading the object store with
+      code of the tool's own for being a large piece of code.
     serves: [R37]
-    verify: inspection
-    status: approved
+    status: implemented
   - id: R42
-    title: Words Compared By Code Of Its Own
-    text: The tool SHALL find the changed words of a text with a comparison of its own.
-    rationale: A longest common subsequence over the words takes a few dozen lines, where a diff
-      library would be a dependency.
+    title: Words Compared By Git
+    text: The tool SHALL find the changed words of a text with git's diff.
+    rationale: Git compares words in linear memory and is installed wherever a ref is read. A
+      diff library would be a dependency, and a comparison of the tool's own took memory that
+      grew with the square of a text.
     serves: [R40.1]
     verify: inspection
+    status: implemented
+  - id: R43
+    title: Markdown Read With goldmark
+    text: The server SHALL read a topic's Markdown with goldmark and send it to the page as
+      blocks of text.
+    rationale: goldmark reads Markdown as CommonMark does, with GitHub's tables, and needs no
+      library of its own, so a topic reads on the page as it previews in an editor; a parser of
+      the tool's own would differ from those previews wherever it fell short. Blocks rather
+      than HTML keep the page building text as text.
+    serves: [R26.16, R31]
+    verify: inspection
     status: approved
+    links:
+      - url: https://github.com/yuin/goldmark
+        title: goldmark
+  - id: R44
+    title: Diagrams Drawn By Mermaid
+    text: The page SHALL draw each diagram of a topic with Mermaid, embedded in the binary as
+      released.
+    rationale: Mermaid draws state machines, sequences of messages and flowcharts from text that
+      diffs and reviews like the rest of a set, and GitHub and GitLab draw it in Markdown. D2
+      was not taken for being a large dependency few viewers know; Graphviz because it needs
+      dot installed beside the binary.
+    serves: [R26.16]
+    verify: inspection
+    status: approved
+    links:
+      - url: https://mermaid.js.org/
+        title: Mermaid
+    children:
+      - id: R44.1
+        title: Strict Mode
+        text: The page SHALL run Mermaid at its strict security level.
+        rationale: Mermaid then cleans a diagram's labels of markup and runs no script in them,
+          so a diagram cannot add script to the page.
+        serves: [R7]
+        status: approved
+      - id: R44.2
+        title: Licence Shipped
+        text: The server SHALL serve Mermaid's licence beside it.
+        rationale: The MIT licence asks that every copy include its notice.
+        status: approved

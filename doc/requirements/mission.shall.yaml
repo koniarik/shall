@@ -146,6 +146,13 @@ needs:
     text: Read a set as a document, and reach any item it names in one step.
     serves: [O2]
     status: hypothesis
+  - id: N15
+    title: Understood From The Set Alone
+    stakeholder: S2
+    text: Understand what each requirement means from the set itself, with the terms and the
+      design it rests on explained where I read it.
+    serves: [O2]
+    status: hypothesis
   - id: N14
     title: See It As I Write
     stakeholder: S1

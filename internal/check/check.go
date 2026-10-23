@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"shall"
 	"shall/internal/finding"
@@ -55,6 +56,13 @@ func Run(root string) ([]finding.Finding, error) {
 // returns each set apart, in manifest path order, together with the findings
 // that belong to no set.
 func Sets(root string) ([]*Result, []finding.Finding, error) {
+	return SetsWithin(root, "")
+}
+
+// SetsWithin is Sets for the sets of a repository whose root is top: a set
+// whose path leads out of top, or a file of a set that is a link leading
+// out of it, is found wrong rather than read. An empty top bounds nothing.
+func SetsWithin(root, top string) ([]*Result, []finding.Finding, error) {
 	v, err := schema.Load(shall.Schema())
 	if err != nil {
 		return nil, nil, err
@@ -69,7 +77,7 @@ func Sets(root string) ([]*Result, []finding.Finding, error) {
 	}
 	var results []*Result
 	for _, m := range manifests {
-		r := checkSet(root, m, v)
+		r := checkSet(root, top, m, v)
 		finding.Sort(r.Findings)
 		results = append(results, r)
 	}
@@ -81,6 +89,44 @@ func rel(root, path string) string {
 		return filepath.ToSlash(r)
 	}
 	return path
+}
+
+// leadsOut tells whether path is a link that leads out of top, itself or
+// through the links it leads to; it looks no further than a system follows
+// links.
+func leadsOut(top, path string) bool {
+	for range 40 {
+		to, err := os.Readlink(path)
+		if err != nil {
+			return false
+		}
+		if !filepath.IsAbs(to) {
+			to = filepath.Join(filepath.Dir(path), to)
+		}
+		if !within(top, to) {
+			return true
+		}
+		path = to
+	}
+	return false
+}
+
+func outOfTheRepository(root, path string) finding.Finding {
+	return finding.Finding{Severity: finding.Error, File: rel(root, path), Message: "the file is a link that leads out of the repository"}
+}
+
+// within tells whether path lies in dir.
+func within(dir, path string) bool {
+	d, err := filepath.Abs(dir)
+	if err != nil {
+		return false
+	}
+	p, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	r, err := filepath.Rel(d, p)
+	return err == nil && r != ".." && !strings.HasPrefix(r, ".."+string(filepath.Separator))
 }
 
 func cause(err error) string {
@@ -118,8 +164,12 @@ func parse(root, path string) (*tree.Node, []finding.Finding) {
 	return n, nil
 }
 
-func checkSet(root, manifestPath string, v *schema.Validator) *Result {
+func checkSet(root, top, manifestPath string, v *schema.Validator) *Result {
 	r := &Result{Manifest: rel(root, manifestPath), Dir: filepath.Dir(manifestPath)}
+	if top != "" && leadsOut(top, manifestPath) {
+		r.Findings = append(r.Findings, outOfTheRepository(root, manifestPath))
+		return r
+	}
 	manifest, out := parse(root, manifestPath)
 	r.Findings = out
 	if manifest == nil {
@@ -140,6 +190,13 @@ func checkSet(root, manifestPath string, v *schema.Validator) *Result {
 
 	if p, ok := manifest.Get("path").Str(); ok {
 		r.Dir = filepath.Join(r.Dir, filepath.FromSlash(p))
+		if top != "" && !within(top, r.Dir) {
+			r.Findings = append(r.Findings, finding.Finding{
+				Severity: finding.Error, File: r.Manifest, Line: manifest.Get("path").Line, Field: "path",
+				Message: fmt.Sprintf("%s leads out of the repository", p),
+			})
+			return r
+		}
 		if st, err := os.Stat(r.Dir); err != nil || !st.IsDir() {
 			r.Findings = append(r.Findings, finding.Finding{
 				Severity: finding.Error, File: r.Manifest, Line: manifest.Get("path").Line, Field: "path",
@@ -156,6 +213,10 @@ func checkSet(root, manifestPath string, v *schema.Validator) *Result {
 	r.Findings = append(r.Findings, unreadableFindings(root, unreadable)...)
 	var files []*model.File
 	for _, p := range paths {
+		if top != "" && leadsOut(top, p) {
+			r.Findings = append(r.Findings, outOfTheRepository(root, p))
+			continue
+		}
 		n, errs := parse(root, p)
 		r.Findings = append(r.Findings, errs...)
 		file := &model.File{Path: rel(root, p), Tree: n}
