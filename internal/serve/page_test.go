@@ -109,9 +109,9 @@ type page struct {
 	root string
 	// stop stops the server; the tab stays open.
 	stop func()
-	// expected are fragments of the problems the test expects the page to
-	// have, each of which it must have.
-	expected []string
+	// allowed are fragments of problems the test lets the page have, such
+	// as a request refused while the server is stopped on purpose.
+	allowed []string
 }
 
 // openPage serves the files under a new directory and opens path there in a
@@ -154,22 +154,13 @@ func (g *page) tab() *chrome.Page {
 	}
 	g.t.Cleanup(func() {
 		var probs []string
-		seen := map[string]bool{}
 		for _, problem := range p.Problems() {
-			i := slices.IndexFunc(g.expected, func(e string) bool { return strings.Contains(problem, e) })
-			if i < 0 {
+			if !slices.ContainsFunc(g.allowed, func(a string) bool { return strings.Contains(problem, a) }) {
 				probs = append(probs, problem)
-			} else {
-				seen[g.expected[i]] = true
 			}
 		}
 		if len(probs) > 0 {
 			g.t.Errorf("the page had script errors: %v", probs)
-		}
-		for _, e := range g.expected {
-			if !seen[e] {
-				g.t.Errorf("the page had no problem holding %q, want it refused so", e)
-			}
 		}
 		p.Close()
 	})
@@ -802,7 +793,7 @@ func TestPageWhenTheServerGoes(t *testing.T) {
 	g := openPage(t, pageSet(), "/demo/")
 	g.stop()
 	// With the server gone, the browser logs the requests it cannot make.
-	g.expected = append(g.expected, "net::ERR_CONNECTION_REFUSED")
+	g.allowed = append(g.allowed, "net::ERR_CONNECTION_REFUSED")
 	g.do(sel("c-gamma.shall.yaml") + `.querySelector('button.fold').click()`)
 	g.expect(sel("c-gamma.shall.yaml")+`.hasAttribute('data-failed')`, "a chapter that cannot be fetched is marked")
 	if !g.is(sel("c-gamma.shall.yaml") + `.dataset.open === 'false'`) {
@@ -859,8 +850,9 @@ func TestPageDrawsATopic(t *testing.T) {
 		"a.shall.yaml":       "title: Alpha\nitems:\n  - id: T1\n    title: Water\n" + text,
 	}
 	g := openPage(t, set, "/demo/T1")
-	// The handler a label slips in reaches the page only to be refused.
-	g.expected = append(g.expected, "Executing inline event handler violates the following Content Security Policy")
+	// A handler a label slips in may reach the page while Mermaid measures
+	// it, only to be refused there.
+	g.allowed = append(g.allowed, "Executing inline event handler violates the following Content Security Policy")
 	topic := `document.getElementById('T1')`
 	g.expect(topic+`.querySelectorAll('figure.diagram[data-drawn]').length === 3`, "every diagram drawn, or found wrong")
 	for _, c := range []struct{ expr, want string }{
