@@ -1,0 +1,94 @@
+---
+title: Command Line
+items:
+  - id: T64
+    title: The Command Line
+    text: |
+      `shall` is one command with four subcommands. Each reads every set whose
+      manifest lies under the directory it is given, the current one by default
+      [R1]:
+
+      ```text
+      shall check [-json] [-warnings-as-errors] [directory]
+      shall diff [-json] [-base ref] [-head ref] [directory]
+      shall serve [-addr host:port] [directory]
+      shall export -out dir [-base path] [directory]
+      shall dump [directory]
+      ```
+
+      - `check` holds each set to its format [T63] and prints every finding where
+        it lies [R3], or as one JSON document with `-json` [R4]. Errors fail the
+        run; warnings fail it only with `-warnings-as-errors` [R5].
+      - `diff` compares the sets between two git refs, the base `HEAD` and the head
+        the working tree unless given [R37.1]; [T65] describes what it reports.
+      - `serve` shows each set as one document in the browser [T66], and answers
+        the same as JSON [T67].
+      - `export` writes what `serve` would show as files for a static web host
+        [T68].
+      - `dump` prints everything `serve` would answer as one JSON document, for
+        scripts [T67.10].
+
+      Every command exits with status 0 when nothing failed; 1 when `check` fails
+      a set [R5], [R5.2] or `diff` finds a change [R37.5]; and 2 when it cannot
+      run as its command line asks, saying why on standard error [R64.1].
+    children:
+      - id: R64.1
+        title: Misuse Exits With Status 2
+        text: If the tool cannot run a command as its command line asks, then the tool SHALL say
+          why and exit with status 2.
+        rationale: A script or an agent then tells a command it wrote wrongly from a set that
+          failed its check.
+        serves: [N55.1]
+        status: implemented
+      - id: T64.2
+        title: Installing And The Hook
+        text: |
+          With Go installed, `go install ./cmd/shall` in a checkout of the
+          repository puts `shall` in `$(go env GOPATH)/bin` [R19.1], and
+          `go run ./cmd/shall check` runs it there without installing.
+
+          As a pre-commit hook [R6], in the `.pre-commit-config.yaml` of the
+          repository that holds the set:
+
+          ```yaml
+          repos:
+            - repo: https://github.com/koniarik/shall
+              rev: <tag or commit>
+              hooks:
+                - id: shall-check
+          ```
+
+          pre-commit builds the hook from source, and fetches Go when the machine
+          has none.
+  - id: R72
+    title: Submodules As Their Files
+    text: When the tool reads a set whose files lie in a git submodule, the tool SHALL read the
+      files the submodule holds, on disk as they stand and at a ref as the commit that ref
+      records for the submodule, taken from the submodule's own repository.
+    rationale: A shared set kept in a submodule then reads the same in every command, as if its
+      files stood in the repository itself.
+    serves: [N56.2]
+    status: implemented
+    children:
+      - id: R72.1
+        title: A Submodule Not On Disk
+        text: If a submodule's repository is not on disk, then the tool SHALL read the submodule
+          as empty.
+        rationale: Its directory on disk is empty too, so a set reads the same on disk and at a
+          ref.
+        status: implemented
+      - id: R72.2
+        title: A Commit Not Fetched
+        text: If a submodule's repository lacks the commit a ref records for it, then the tool SHALL
+          say so and exit with status 2.
+        rationale: Fetching the commit is then the fix, which the message names.
+        status: implemented
+  - id: R73
+    title: Nothing Read From Outside The Repository
+    text: If a set's path, or a link among its files, leads out of the repository, then the tool
+      SHALL report it as an error in the set rather than read the files it leads to.
+    rationale: A set is then what its repository holds, the same on disk as at any ref; files
+      outside it are in no ref and no review, and reading them would reach beyond what the
+      repository's owners agreed to.
+    serves: [N62.1]
+    status: approved

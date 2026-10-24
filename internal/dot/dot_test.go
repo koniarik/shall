@@ -1,6 +1,10 @@
 package dot
 
 import (
+	"fmt"
+	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -52,4 +56,43 @@ func TestADrawingCleaned(t *testing.T) {
 	if got != want {
 		t.Errorf("cleaned =\n%s\nwant\n%s", got, want)
 	}
+}
+
+func TestGraphvizStartsOnlyToDrawAndKeepsNothing(t *testing.T) {
+	t.Attr("verifies", "R59.2")
+	// A process of its own, with a temporary directory of its own, shows what
+	// Graphviz does from the start of a program.
+	tmp := t.TempDir()
+	cmd := exec.Command(os.Args[0], "-test.run=^TestDrawingHelper$", "-test.count=1")
+	cmd.Env = append(os.Environ(), "SHALL_DOT_HELPER=1", "TMPDIR="+tmp)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("the drawing process failed: %v\n%s", err, out)
+	}
+	entries, err := os.ReadDir(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		t.Errorf("drawing left %s in the temporary directory", e.Name())
+	}
+}
+
+// TestDrawingHelper is the process TestGraphvizStartsOnlyToDrawAndKeepsNothing
+// starts: it fails when Graphviz started before the first drawing, which then
+// allocates tens of megabytes compiling it.
+func TestDrawingHelper(t *testing.T) {
+	if os.Getenv("SHALL_DOT_HELPER") != "1" {
+		return
+	}
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	if before := m.TotalAlloc; before > 8<<20 {
+		fmt.Fprintf(os.Stderr, "%d MB allocated before the first drawing; Graphviz started without being asked\n", before>>20)
+		os.Exit(1)
+	}
+	if _, err := SVG("digraph { a -> b }"); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	os.Exit(0)
 }

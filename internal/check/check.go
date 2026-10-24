@@ -2,6 +2,7 @@
 package check
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -77,11 +78,88 @@ func SetsWithin(root, top string) ([]*Result, []finding.Finding, error) {
 	}
 	var results []*Result
 	for _, m := range manifests {
-		r := checkSet(root, top, m, v)
+		results = append(results, readSet(root, top, m, v))
+	}
+	// The rules read the sets a set depends on, so they run once every set
+	// is read.
+	for _, r := range results {
+		if r.Set != nil {
+			r.Findings = append(r.Findings, rules.Check(r.Manifest, r.Tree, r.Set, dependencies(root, top, r, results, v))...)
+		}
 		finding.Sort(r.Findings)
-		results = append(results, r)
 	}
 	return results, out, nil
+}
+
+// dependencies reads the sets a set's manifest depends on, by the names it
+// gives them. A set in the same repository is read as it stands beside this
+// one, from among those already read where it is one of them; a set in
+// another repository cannot be read yet.
+func dependencies(root, top string, r *Result, read []*Result, v *schema.Validator) map[string]rules.Dep {
+	deps := map[string]rules.Dep{}
+	list := r.Tree.Get("depends")
+	if list == nil || list.Kind != tree.Map {
+		return deps
+	}
+	repo := repository(root, top, filepath.Join(root, r.Manifest))
+	for _, p := range list.Pairs {
+		if p.Value.Get("git") != nil {
+			deps[p.Key] = rules.Dep{Why: "it is in another repository, which this checker does not read yet"}
+			continue
+		}
+		where, _ := p.Value.Get("path").Str()
+		dir := filepath.Join(repo, filepath.FromSlash(where))
+		manifest := filepath.Join(dir, set.ManifestName)
+		if top != "" && !within(top, dir) {
+			deps[p.Key] = rules.Dep{Why: fmt.Sprintf("%s leads out of the repository", cmp.Or(where, "."))}
+			continue
+		}
+		var dep *Result
+		for _, other := range read {
+			if same(filepath.Join(root, other.Manifest), manifest) {
+				dep = other
+			}
+		}
+		if dep == nil {
+			if _, err := os.Stat(manifest); err != nil {
+				deps[p.Key] = rules.Dep{Why: fmt.Sprintf("there is no %s at %s", set.ManifestName, cmp.Or(where, "the root of the repository"))}
+				continue
+			}
+			dep = readSet(root, top, manifest, v)
+		}
+		if dep.Set == nil {
+			deps[p.Key] = rules.Dep{Why: fmt.Sprintf("its manifest, %s, says too little to find its files", dep.Manifest)}
+			continue
+		}
+		deps[p.Key] = rules.Dep{Set: dep.Set}
+	}
+	return deps
+}
+
+// repository returns the root of the repository that holds a manifest: top
+// when given, else the nearest directory above the manifest that holds .git,
+// else root.
+func repository(root, top, manifest string) string {
+	if top != "" {
+		return top
+	}
+	for d := filepath.Dir(manifest); ; {
+		if _, err := os.Stat(filepath.Join(d, ".git")); err == nil {
+			return d
+		}
+		up := filepath.Dir(d)
+		if up == d {
+			return root
+		}
+		d = up
+	}
+}
+
+// same tells whether two paths name the same file.
+func same(a, b string) bool {
+	x, errA := filepath.Abs(a)
+	y, errB := filepath.Abs(b)
+	return errA == nil && errB == nil && x == y
 }
 
 func rel(root, path string) string {
@@ -164,7 +242,9 @@ func parse(root, path string) (*tree.Node, []finding.Finding) {
 	return n, nil
 }
 
-func checkSet(root, top, manifestPath string, v *schema.Validator) *Result {
+// readSet reads one set and checks each of its files on its own; the rules,
+// which may read other sets, are left to the caller.
+func readSet(root, top, manifestPath string, v *schema.Validator) *Result {
 	r := &Result{Manifest: rel(root, manifestPath), Dir: filepath.Dir(manifestPath)}
 	if top != "" && leadsOut(top, manifestPath) {
 		r.Findings = append(r.Findings, outOfTheRepository(root, manifestPath))
@@ -231,6 +311,5 @@ func checkSet(root, top, manifestPath string, v *schema.Validator) *Result {
 		r.Findings = append(r.Findings, v.Check(kind, file.Path, n)...)
 	}
 	r.Set = model.New(files)
-	r.Findings = append(r.Findings, rules.Check(r.Manifest, manifest, r.Set)...)
 	return r
 }

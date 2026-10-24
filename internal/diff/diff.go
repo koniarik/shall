@@ -197,7 +197,24 @@ func (s side) manifest(key string) any {
 	if s.res == nil {
 		return nil
 	}
-	return plain(s.res.Tree.Get(key))
+	v := plain(s.res.Tree.Get(key))
+	if key == "depends" {
+		redact(v)
+	}
+	return v
+}
+
+// redact replaces the credentials in the git addresses of a manifest's
+// depends, so that a diff never shows them.
+func redact(depends any) {
+	deps, _ := depends.(map[string]any)
+	for _, dep := range deps {
+		if d, ok := dep.(map[string]any); ok {
+			if address, ok := d["git"].(string); ok {
+				d["git"] = set.Redacted(address)
+			}
+		}
+	}
 }
 
 func (s side) mission(key string) any {

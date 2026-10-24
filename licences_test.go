@@ -1,6 +1,8 @@
 package shall
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -77,6 +79,45 @@ func TestEveryDependencyHasItsLicenceRecorded(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("doc/licences.md has no row for %s %s, want its licence recorded", name, version)
+		}
+	}
+}
+
+// takenAsReleased matches a row of the record's files taken as released:
+// the file's path and its SHA-256.
+var takenAsReleased = regexp.MustCompile("(?m)^\\| `([^`]+)` \\|.*\\| `([0-9a-f]{64})` \\|$")
+
+func TestFilesTakenAsReleasedAreAsRecorded(t *testing.T) {
+	t.Attr("verifies", "R18")
+	t.Attr("verifies", "R18.1")
+	record, err := os.ReadFile("doc/licences.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorded := map[string]string{}
+	for _, m := range takenAsReleased.FindAllStringSubmatch(string(record), -1) {
+		recorded[m[1]] = m[2]
+	}
+	// Every file of a library embedded for the page, and Graphviz's.
+	files, err := filepath.Glob("internal/serve/web/static/*/*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files = append(files, "third_party/go-graphviz/internal/wasm/graphviz.wasm")
+	for _, f := range files {
+		if _, ok := recorded[filepath.ToSlash(f)]; !ok {
+			t.Errorf("doc/licences.md records no source and SHA-256 for %s", f)
+		}
+	}
+	for path, want := range recorded {
+		data, err := os.ReadFile(filepath.FromSlash(path))
+		if err != nil {
+			t.Errorf("doc/licences.md records %s: %v", path, err)
+			continue
+		}
+		sum := sha256.Sum256(data)
+		if got := hex.EncodeToString(sum[:]); got != want {
+			t.Errorf("%s has SHA-256 %s, but doc/licences.md records %s; record where the new file comes from", path, got, want)
 		}
 	}
 }

@@ -1,0 +1,1006 @@
+---
+title: Serve
+items:
+  - id: T66
+    title: The Document
+    text: |
+      `shall serve` shows each set under its directory as one document in the
+      browser [R26], at the address it prints when it starts [R25.3]. Its start
+      page lists the sets, each with its requirements by status [R25.4], [R25.6].
+
+      A set's document reads the mission file first, then its chapters in path
+      order. A chapter stays folded until the reader opens it or goes to an item in
+      it [R26.4], [R26.6], and an outline beside the document leads to each
+      chapter and item [R26.11]. An item shows its statement first; its rationale,
+      notes and the items that name it wait in one fold area [R26.13]. A topic's
+      Markdown is laid out as it reads, its diagrams drawn [R26.16].
+
+      - Every id is a link, with a preview of what it names [R27], [R27.1].
+      - The find box goes to an id, or lists the items that hold the words typed
+        [R28].
+      - The status filter shows only the requirements at the statuses chosen
+        [R26.15].
+      - The checker's findings sit on the items they concern [R30].
+      - The page follows the files as they are saved [R29].
+      - The reader switches between black on white and white on black [R34].
+
+      Every view has an address [R26.2]: `/{set}/` for a set's document and
+      `/{set}/{id}` for an item in it [R26.7], [R27.3], with the folds and the
+      filter in its query.
+  - id: R25
+    title: Serves The Sets Under A Directory
+    text: When started, the server SHALL serve every set whose manifest lies under the given
+      directory, the current one by default.
+    rationale: The sets a reader browses are then the ones the checker checks.
+    serves: [N53.3]
+    status: implemented
+    children:
+      - id: R25.1
+        title: Address From The Command Line
+        text: Where its command line gives an address and port, the server SHALL listen on them.
+        status: implemented
+      - id: R25.2
+        title: Local By Default
+        text: Where its command line gives no address, the server SHALL accept connections only
+          from the machine it runs on.
+        rationale: Serving a repository to the network is then a choice someone makes, not a
+          default they inherit.
+        status: implemented
+        children:
+          - id: R25.2.1
+            title: Local Means Local
+            text: While it accepts connections only from the machine it runs on, the server SHALL
+              refuse every request whose Host header names neither localhost nor a loopback
+              address.
+            rationale: A web page in the reader's browser could otherwise reach the server through
+              a domain it controls, by DNS rebinding. A server given a network address can be
+              reached from that network anyway, so the check would add nothing there.
+            serves: [R7]
+            status: implemented
+          - id: R25.2.2
+            title: The Default Address
+            text: Where its command line gives no address, the server SHALL listen on port 7180 of
+              127.0.0.1.
+            rationale: A bookmark or a script then finds the server where it was the last time.
+            status: implemented
+      - id: R25.3
+        title: Says Where It Serves
+        text: When started, the server SHALL print the address it serves on.
+        status: implemented
+      - id: R25.4
+        title: Sets Listed
+        text: The server SHALL list the sets it serves by name on its start page, each as a link
+          to its document.
+        status: implemented
+      - id: R25.5
+        title: Clashing Names
+        text: If two sets it serves share a name, then the server SHALL list that name with an
+          error naming both manifests, and serve neither under it.
+        rationale: Keeping set names unique is up to the sets' authors. The server cannot tell
+          which of the two an address means, so it points out the clash.
+        status: implemented
+      - id: R25.6
+        title: Sets Compared
+        text: The server SHALL show on its start page, for each set, how many of its
+          requirements stand at each effective status [T63.10].
+        rationale: A department manager then compares the sets of several products at a
+          glance, in the same terms for each.
+        serves: [N56.1]
+        status: implemented
+  - id: R26
+    title: One Document Per Set
+    text: The server SHALL show each set as one document, its mission file first and then its
+      chapters [T63.2], each item in the order its file holds it and each child under its
+      parent.
+    serves: [N53.3]
+    status: implemented
+    children:
+      - id: R26.1
+        title: Statements Shown
+        text: The server SHALL show each item of the mission file and of an unfolded chapter with
+          its id, title and text.
+        status: implemented
+      - id: R26.2
+        title: Views Are Links
+        text: The server SHALL keep each choice the reader makes about the view in the page
+          address, except the colour scheme, so that opening the address again shows the same
+          view.
+        rationale: A link then opens the view its sender saw. The colour scheme stays with each
+          reader instead, so that a link does not impose the sender's on whoever opens it.
+        status: implemented
+      - id: R26.3
+        title: Statuses Shown
+        text: The server SHALL show the status of each need and the effective status [T63.10] of
+          each requirement, with a requirement's written status beside it where the two differ.
+        status: implemented
+      - id: R26.4
+        title: Chapters Folded
+        text: The server SHALL show each chapter folded, as its title and the number of its items
+          and findings, until it is unfolded.
+        rationale: A set of thousands of requirements then opens as quickly as a small one, and
+          the folded document doubles as its outline.
+        status: implemented
+      - id: R26.5
+        title: Loaded When Unfolded
+        text: While a chapter is folded, the server SHALL NOT send the chapter to the page.
+        rationale: A single item still comes on its own wherever the page needs it, such as in a
+          preview, a backlink or a search result.
+        serves: [R26.4]
+        status: implemented
+      - id: R26.6
+        title: Unfolded To Reach An Item
+        text: When a link, an item's address, a jump or an outline entry leads to a folded
+          chapter or to an item in one, the server SHALL unfold that chapter.
+        status: implemented
+      - id: R26.7
+        title: A Set's Address
+        text: The server SHALL give each set's document an address made of the set's name.
+        rationale: Ids are unique only within a set, so every address names the set it belongs
+          to.
+        status: implemented
+      - id: R26.8
+        title: Broken Files In Place
+        text: If a file of a set cannot be read or parsed as YAML, then the server SHALL show the
+          rest of the set, with that file in its place as its file name and its findings.
+        rationale: The page shows what is on disk, even halfway through an edit, and the rest of
+          the set stays readable. Showing the last version that parsed was not taken because the
+          page would then show what no file holds.
+        serves: [N53.3, N52.5]
+        status: implemented
+      - id: R26.9
+        title: Chapters In Path Order
+        text: The server SHALL show a set's chapters in the order of their file paths.
+        rationale: Authors then choose the order by how they name the files, with no list to keep
+          in step with them.
+        status: implemented
+      - id: R26.10
+        title: Mission First
+        text: The server SHALL show a set's mission statement before its items.
+        status: implemented
+      - id: R26.11
+        title: Outline
+        text: The server SHALL show beside each document an outline of its chapters, each entry
+          a link to its place.
+        rationale: A reader of a large set then moves between its parts in one step.
+        status: implemented
+        children:
+          - id: R26.11.1
+            title: Unfolded Chapters Outlined
+            text: While a chapter is unfolded, the server SHALL list its top-level items under it
+              in the outline, and none of their children, whatever their kind.
+            rationale: The outline then lists what the page holds and no more, so a folded
+              chapter still sends none of its items.
+            status: implemented
+          - id: R26.11.2
+            title: Where The Reader Is
+            text: The server SHALL mark in the outline the chapter at the top of the screen, and
+              the part of it the reader is in.
+            status: implemented
+          - id: R26.11.3
+            title: Outline On Narrow Screens
+            text: While the screen is narrower than 60em, the server SHALL keep the outline folded
+              behind a button.
+            rationale: The document then keeps the width of a phone or a narrow window.
+            status: implemented
+      - id: R26.12
+        title: Unfolded When Reached
+        text: When a folded chapter's heading comes into view, the server SHALL unfold that
+          chapter, unless the reader folded it.
+        rationale: A long set then loads as the reader reaches it, one chapter at a time, and a
+          small one opens whole. Such an unfolding is no choice of the reader's, so it stays out
+          of the page address, which scrolling makes up for; folding a chapter is one, and the
+          address keeps it.
+        status: implemented
+      - id: R26.13
+        title: One Fold Area
+        text: The server SHALL put an item's backlinks, and a requirement's rationale and notes,
+          in one area at the item's end, folded until the reader unfolds it.
+        rationale: The statement then reads first, with what surrounds it one step away.
+        status: implemented
+      - id: R26.14
+        title: Outside Links In A New Tab
+        text: When the reader follows a link that leads outside the server, the server SHALL open
+          it in a new tab.
+        rationale: The document then stays where the reader left it.
+        status: implemented
+      - id: R26.15
+        title: Filtered By Status
+        text: While the reader has chosen effective statuses [T63.10], the server SHALL show of the
+          requirements only those at a chosen status, and their parents as context.
+        rationale: An implementer then sees what is still in draft or not yet verified without
+          reading every chapter. Chapters with no requirement at a chosen status stay folded.
+        status: implemented
+        children:
+          - id: R26.15.1
+            title: The Filter Gives Way
+            text: When the reader goes to an item that the filter hides, the server SHALL drop
+              the filter.
+            rationale: A link or a search result then always reaches its item.
+            status: implemented
+      - id: R26.16
+        title: Topics Drawn
+        text: The server SHALL show a topic's text [T63.11] laid out as its Markdown reads, each
+          image as a link to it and each diagram drawn.
+        rationale: The page then loads nothing from outside the server.
+        serves: [N53.4]
+        status: implemented
+      - id: R26.17
+        title: Progress Per Topic
+        text: The server SHALL show beside each topic how many of the requirements below it stand
+          at each effective status.
+        rationale: A topic has no status of its own. The count tells how far its part of the set
+          has got, where the lowest status alone would make one draft among many verified
+          requirements read as the whole.
+        status: implemented
+      - id: R26.18
+        title: Kinds Named
+        text: The server SHALL show beside the title of each item the kind of item it is.
+        rationale: A reader who reaches an item by a link then knows whether it is a result, a
+          role, a need, a promise or an explanation without knowing the letters [T63].
+        serves: [N53.4]
+        status: implemented
+      - id: R26.19
+        title: Ranking Shown
+        text: The server SHALL show beside each objective the ranking lists its place in the
+          ranking.
+        rationale: The ranking settles which objective wins when two conflict [T63.2], which a
+          reader weighing a need or a requirement wants to see where the objective is.
+        serves: [N53.4]
+        status: implemented
+  - id: R27
+    title: Ids Are Links
+    text: The server SHALL show every id that a field names or a text cites [T63.12], and that
+      names an item the server serves, as a link to that item.
+    serves: [N53.3]
+    status: implemented
+    children:
+      - id: R27.1
+        title: Preview On Hover Or Focus
+        text: When the reader points at a link to an item or moves keyboard focus to it, the
+          server SHALL show that item's title and text beside it.
+        rationale: Previews let a reader follow a reference without losing their place.
+        status: implemented
+      - id: R27.2
+        title: Backlinks In Short
+        text: The server SHALL show on each item the ids of the items that name or cite it, each
+          once, in reading order.
+        status: implemented
+        children:
+          - id: R27.2.1
+            title: Backlinks Unfolded
+            text: When the reader unfolds an item's fold area, the server SHALL show there each
+              item that names it with its title.
+            rationale: Their texts stay out, since each id previews its text on hover or focus.
+            status: implemented
+      - id: R27.3
+        title: Every Item Has An Address
+        text: The server SHALL give each item an address, made of its set's address and its id,
+          that opens the document at that item.
+        status: implemented
+      - id: R27.4
+        title: Unknown Ids As Text
+        text: If a field names or a text cites an id that is neither an item nor retired in a set
+          the server serves, then the server SHALL show that id as plain text.
+        rationale: A link must lead somewhere. The checker's finding on the item says what is
+          wrong.
+        status: implemented
+      - id: R27.5
+        title: Retired Ids Marked
+        text: If a field names or a text cites a retired id [T63.4], then the server SHALL show that
+          id as plain text, marked retired, with the title it was retired under.
+        status: implemented
+      - id: R27.6
+        title: Titles Beside Ids
+        text: The server SHALL show the title of each item that serves, stakeholders or mirrors
+          names beside its id.
+        rationale: A reader then sees what an item serves without pointing at each id, which a
+          phone cannot do. The titles are grey, so that the statement stays the text to read.
+        serves: [N53.3, N54.1]
+        status: implemented
+  - id: R28
+    title: Jump To An Id
+    text: When the reader enters an id, the server SHALL show the document at that item, in the
+      current set unless the id names another set.
+    serves: [N53.3]
+    status: implemented
+    children:
+      - id: R28.1
+        title: Jump To No Item
+        text: If the reader enters an id that is neither an item nor retired in a set the server
+          serves, then the server SHALL keep the document where it is and say that no item has
+          that id.
+        status: implemented
+      - id: R28.2
+        title: Jump To A Retired Id
+        text: If the reader enters a retired id, then the server SHALL keep the document where it
+          is and say the file and line where the id was retired.
+        status: implemented
+      - id: R28.3
+        title: Found By Words
+        text: When the reader enters words, the server SHALL list the items whose id, title or
+          text holds every one of them, those matching by id first, then by title, then by text.
+        rationale: A reader often knows what a requirement says before its id, and [O46] measures
+          the time to find one by its text.
+        status: implemented
+  - id: R29
+    title: Follows The Files
+    text: When a set's file changes on disk, the server SHALL show the set as its files then
+      stand within two seconds, without the reader reloading the page.
+    rationale: An author edits in their editor and reads in the browser, and the two stay in
+      step.
+    serves: [N52.5]
+    status: implemented
+    children:
+      - id: R29.1
+        title: Any Number Of Tabs
+        text: The server SHALL keep each visible page following the files, however many tabs are
+          open.
+        rationale: Browsers open only six connections to one server over plain HTTP, and each
+          page following the files holds one open.
+        status: implemented
+      - id: R29.2
+        title: Place Kept
+        text: When a page follows a change, the server SHALL keep the item at the top of the
+          screen there, or the item after it if that one was removed.
+        rationale: A reader keeps their place while an author saves beside them.
+        status: implemented
+  - id: R30
+    title: Findings In Place
+    text: The server SHALL show each finding that the checker reports for the set on the item it
+      concerns, with its severity.
+    rationale: The page and the checker then cannot disagree.
+    serves: [N53.3, N52.5]
+    status: implemented
+    children:
+      - id: R30.1
+        title: Findings Without An Item
+        text: The server SHALL show each finding that concerns no item at the head of the file it
+          concerns, or at the top of the document when it concerns no file of the set.
+        status: implemented
+  - id: R33
+    title: Only What It Builds
+    text: The server SHALL send only the answers it builds and the files embedded in its
+      binary, never a file that a request names.
+    rationale: A request then chooses among the files of the sets the server has read and
+      reaches no other, however its path is written, without the server having to check paths.
+    serves: [R7]
+    status: implemented
+  - id: R34
+    title: Black Or White
+    text: The server SHALL let the reader switch its pages between black on white and white on
+      black.
+    serves: [N53.3]
+    status: implemented
+    children:
+      - id: R34.1
+        title: The System's Scheme First
+        text: While the reader has not chosen a colour scheme, the server SHALL show the one the
+          reader's system asks for.
+        status: implemented
+      - id: R34.2
+        title: Kept By The Browser
+        text: When the reader chooses a colour scheme, the server SHALL keep the choice in the
+          browser's own storage, for every page it serves.
+        rationale: The choice belongs to the reader, not to a set or a link, so no file and no
+          address holds it.
+        status: implemented
+  - id: T67
+    title: The API
+    text: |
+      `shall serve` answers in JSON over HTTP, and its page builds the document
+      from the same answers [R36.1], so a script or an agent reads a set exactly as
+      a reader sees it: ids resolved, statuses worked out, findings placed. It only
+      reads [R36.3], and answers only on this machine unless given an address
+      [R25.2].
+
+      The examples are the answers for the fuller example set [T63.14], served
+      from the directory that holds its `shall.yaml`.
+
+      - Every answer is `application/json` and carries `version`, the version of
+        the files it was built from. The version changes whenever a file of a set
+        changes, and differs from one start of the server to the next.
+      - A set, file or item that does not exist is answered with status 404 and
+        `{"error": "…"}`, a sentence saying what is missing.
+      - Fields keep the names the format gives them. What the server works out is
+        named in camelCase: `effectiveStatus`, `namedBy`, `itemId`, `retiredWith`.
+      - Paths are relative to the directory the server serves.
+
+      | Resource | Answer |
+      |---|---|
+      | `GET /api/sets` | The sets served, with their error and warning counts and their requirements by status [T67.4] |
+      | `GET /api/sets/{set}` | One set: its findings, its mission file with its items, and its chapters without theirs [T67.5] |
+      | `GET /api/sets/{set}/files/{path}` | One file with its items [T67.6] |
+      | `GET /api/sets/{set}/items/{id}` | One item with its children [T67.7] |
+      | `GET /api/sets/{set}/search?q={words}` | The items an id or words name [T67.8] |
+      | `GET /api/events` | A stream of versions, one each time the files change [T67.9] |
+    children:
+      - id: T67.1
+        title: References
+        text: |
+          Every id an item names comes as a reference, which says what the id names:
+
+          | `state` | Meaning | Also carries |
+          |---|---|---|
+          | `item` | An item of a set the server serves | `set`, `title`, `file` |
+          | `retired` | A retired id | `set`, `title` (the one it was retired under), `retiredWith` when an ancestor took it |
+          | `unknown` | Nothing the server serves | — |
+          | `mission` | The word `mission` in a need's `serves` | — |
+
+          `id` is the id as written. Where it names an item of another set, written
+          `name/id`, `set` is that set and `itemId` the item's id in it.
+      - id: T67.2
+        title: Items
+        text: |
+          An item carries `id`, `kind` (`objective`, `stakeholder`, `need`,
+          `requirement` or `topic`), `title`, `text`, and the `file` and `line` it is
+          written at, then the fields of its kind as written: `measure`,
+          `stakeholders`, `serves`, `rationale`, `verify`, `status`, `notes`, `links`,
+          `mirrors`, `retired`, with every id as a reference [T67.1]. Fields an item
+          leaves out are left out. A topic's `text` is its Markdown as written.
+
+          What the server works out:
+
+          | Field | Meaning |
+          |---|---|
+          | `effectiveStatus` | A requirement's lowest status, counting the requirements below it, as [T63.10] defines it |
+          | `namedBy` | The items that name or cite this one, each a reference with the `field` that names or cites it |
+          | `cites` | Its prose fields that cite an id, `text`, `measure`, `rationale` and `notes` (one entry per note), and on the mission file `mission`, each as runs [T67.3] |
+          | `findings` | The findings of `shall check` that concern this item |
+          | `children` | The item's children, of every kind, in full |
+          | `rank` | An objective's place in the mission's ranking, from 1, where the ranking lists it |
+          | `requirements` | A topic's requirements, all below it, by effective status |
+          | `blocks` | A topic's text read as Markdown [T67.3] |
+      - id: T67.3
+        title: Blocks And Runs
+        text: |
+          A topic's `blocks` are its text as blocks of text, each with a `type`:
+
+          | `type` | Carries |
+          |---|---|
+          | `heading` | `level`, from 1, and `inline` |
+          | `paragraph` | `inline` |
+          | `list` | `ordered`, `start` when ordered, and `items`, each a list of blocks |
+          | `quote` | `blocks` |
+          | `code` | `language` as its fence names it, and `text` |
+          | `diagram` | `language`, `mermaid` or `dot`, as the code block is marked, and `text`, its source; a `dot` diagram also carries `svg`, the server's drawing with only its shapes, text and styles, or `error`, why Graphviz cannot draw it |
+          | `table` | `align` per column (`left`, `center`, `right` or none), `head`, a list of cells, and `rows`, each a list of cells; a cell is a list of `inline` |
+          | `rule` | nothing more |
+          | `html` | `text`, the HTML as written, to be shown as text |
+
+          Within a block, `inline` is a list of runs, each with a `type`: `text` and
+          `code` carry `text`; `emphasis` and `strong` carry `inline`; `link` carries
+          `url`, `title` when it has one, and `inline`, an image coming as a link to
+          it; `break` carries nothing; `ref`, an id the text cites, carries `ref`, a
+          reference [T67.1]. HTML within a line comes as `text`. The `cites` of an
+          item are runs too: `text` runs, and `ref` runs that carry a `ref`.
+      - id: T67.4
+        title: GET /api/sets
+        text: |
+          ```json
+          {
+            "version": "dm7japskbab4.1",
+            "sets": [
+              {
+                "name": "coffee",
+                "manifest": "shall.yaml",
+                "errors": 0,
+                "warnings": 0,
+                "requirements": {
+                  "total": 2,
+                  "draft": 0,
+                  "approved": 0,
+                  "implemented": 2,
+                  "verified": 0,
+                  "waived": 0,
+                  "other": 0
+                }
+              }
+            ],
+            "clashes": [],
+            "findings": []
+          }
+          ```
+
+          `requirements` counts each set's requirements, children included, by
+          effective status; `other` counts those with no status or one the format
+          does not define. `clashes` lists names that several sets share, each with
+          their manifests; neither set is served under it [R25.5]. `findings` are
+          those that belong to no set served under its name.
+      - id: T67.5
+        title: GET /api/sets/{set}
+        text: |
+          The set's files in the order they read: the mission file first, with its
+          items, then the chapters in path order, each with its title, counts and the
+          findings that concern the file itself, but not its items. `requirements`
+          counts the set's requirements by effective status, as each file's `counts`
+          does for the file. `findings` at the top are those that concern no file of
+          the set, such as the manifest's. A file that cannot be read or parsed has
+          `"broken": true` and its findings. `depends` gives, for each name the
+          manifest's `depends` gives a set the server serves, that set's own name,
+          such as `{"company": "acme-standards"}`; it is left out when there is
+          none.
+
+          ```json
+          {
+            "version": "dm7japskbab4.1",
+            "name": "coffee",
+            "manifest": "shall.yaml",
+            "requirements": {
+              "total": 2,
+              "draft": 0,
+              "approved": 0,
+              "implemented": 2,
+              "verified": 0,
+              "waived": 0,
+              "other": 0
+            },
+            "findings": [],
+            "files": [
+              {
+                "path": "requirements/mission.shall.yaml",
+                "kind": "mission",
+                "title": "Why The Machine Exists",
+                "counts": {
+                  "items": 3,
+                  "findings": 0,
+                  "requirements": {
+                    "total": 0,
+                    "draft": 0,
+                    "approved": 0,
+                    "implemented": 0,
+                    "verified": 0,
+                    "waived": 0,
+                    "other": 0
+                  }
+                },
+                "findings": [],
+                "mission": "Coffee in the office without anyone looking after the machine.",
+                "ranking": [
+                  {
+                    "id": "O1",
+                    "state": "item",
+                    "set": "coffee",
+                    "title": "No Dry Brews",
+                    "file": "requirements/mission.shall.yaml"
+                  }
+                ],
+                "items": [
+                  {
+                    "id": "O1",
+                    "kind": "objective",
+                    "title": "No Dry Brews",
+                    "text": "No brew starts while the water tank is empty.",
+                    "file": "requirements/mission.shall.yaml",
+                    "line": 5,
+                    "measure": "brews started on an empty tank, per thousand brews.",
+                    "rank": 1,
+                    "namedBy": [
+                      {
+                        "field": "serves",
+                        "id": "N2.1",
+                        "state": "item",
+                        "set": "coffee",
+                        "title": "Know Before Brewing",
+                        "file": "requirements/mission.shall.yaml"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "S2",
+                    "kind": "stakeholder",
+                    "title": "Office User",
+                    "text": "Wants coffee without having to look after the machine.",
+                    "file": "requirements/mission.shall.yaml",
+                    "line": 9,
+                    "children": [
+                      {
+                        "id": "N2.1",
+                        "kind": "need",
+                        "title": "Know Before Brewing",
+                        "text": "Know before I brew that the tank needs water.",
+                        "file": "requirements/mission.shall.yaml",
+                        "line": 13,
+                        "status": "validated",
+                        "serves": [
+                          {
+                            "id": "O1",
+                            "state": "item",
+                            "set": "coffee",
+                            "title": "No Dry Brews",
+                            "file": "requirements/mission.shall.yaml"
+                          }
+                        ],
+                        "notes": [
+                          "Heard from three users in the first week of the trial."
+                        ],
+                        "namedBy": [
+                          {
+                            "field": "serves",
+                            "id": "R3.1",
+                            "state": "item",
+                            "set": "coffee",
+                            "title": "Refill Lamp",
+                            "file": "requirements/01-tank.shall.yaml"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "path": "requirements/01-tank.shall.yaml",
+                "kind": "chapter",
+                "title": "Water Tank",
+                "counts": {
+                  "items": 3,
+                  "findings": 0,
+                  "requirements": {
+                    "total": 2,
+                    "draft": 0,
+                    "approved": 0,
+                    "implemented": 2,
+                    "verified": 0,
+                    "waived": 0,
+                    "other": 0
+                  }
+                },
+                "findings": [],
+                "retired": [
+                  {
+                    "id": "R4",
+                    "title": "Water Handling",
+                    "file": "requirements/01-tank.shall.yaml",
+                    "line": 27
+                  }
+                ]
+              }
+            ]
+          }
+          ```
+      - id: T67.6
+        title: GET /api/sets/{set}/files/{path}
+        text: |
+          One file with its items in reading order, children nested.
+
+          ```json
+          {
+            "version": "dm7japskbab4.1",
+            "path": "requirements/01-tank.shall.yaml",
+            "kind": "chapter",
+            "title": "Water Tank",
+            "counts": {
+              "items": 3,
+              "findings": 0,
+              "requirements": {
+                "total": 2,
+                "draft": 0,
+                "approved": 0,
+                "implemented": 2,
+                "verified": 0,
+                "waived": 0,
+                "other": 0
+              }
+            },
+            "findings": [],
+            "items": [
+              {
+                "id": "T3",
+                "kind": "topic",
+                "title": "Water Level",
+                "text": "The tank is *empty* once the water is below the pump's intake.\n",
+                "file": "requirements/01-tank.shall.yaml",
+                "line": 3,
+                "children": [
+                  {
+                    "id": "R3.1",
+                    "kind": "requirement",
+                    "title": "Refill Lamp",
+                    "text": "When the tank becomes empty, the machine SHALL light the refill lamp.",
+                    "file": "requirements/01-tank.shall.yaml",
+                    "line": 8,
+                    "status": "implemented",
+                    "effectiveStatus": "implemented",
+                    "serves": [
+                      {
+                        "id": "N2.1",
+                        "state": "item",
+                        "set": "coffee",
+                        "title": "Know Before Brewing",
+                        "file": "requirements/mission.shall.yaml"
+                      }
+                    ],
+                    "links": [
+                      {
+                        "url": "https://ci.example.com/runs/4711",
+                        "title": "Tank tests on hardware revision C"
+                      }
+                    ],
+                    "retired": [
+                      {
+                        "id": "R3.1.2",
+                        "title": "Refill Beep",
+                        "file": "requirements/01-tank.shall.yaml",
+                        "line": 24
+                      }
+                    ],
+                    "children": [
+                      {
+                        "id": "R3.1.1",
+                        "kind": "requirement",
+                        "title": "Lamp Seen From The Door",
+                        "text": "The machine SHALL show the refill lamp to anyone standing at the kitchen door.",
+                        "file": "requirements/01-tank.shall.yaml",
+                        "line": 17,
+                        "status": "implemented",
+                        "effectiveStatus": "implemented",
+                        "verify": "inspection"
+                      }
+                    ]
+                  }
+                ],
+                "requirements": {
+                  "total": 2,
+                  "draft": 0,
+                  "approved": 0,
+                  "implemented": 2,
+                  "verified": 0,
+                  "waived": 0,
+                  "other": 0
+                },
+                "blocks": [
+                  {
+                    "type": "paragraph",
+                    "inline": [
+                      {
+                        "type": "text",
+                        "text": "The tank is "
+                      },
+                      {
+                        "type": "emphasis",
+                        "inline": [
+                          {
+                            "type": "text",
+                            "text": "empty"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "text",
+                        "text": " once the water is below the pump's intake."
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "retired": [
+              {
+                "id": "R4",
+                "title": "Water Handling",
+                "file": "requirements/01-tank.shall.yaml",
+                "line": 27
+              }
+            ]
+          }
+          ```
+      - id: T67.7
+        title: GET /api/sets/{set}/items/{id}
+        text: |
+          One item with its children.
+
+          ```json
+          {
+            "version": "dm7japskbab4.1",
+            "id": "R3.1.1",
+            "kind": "requirement",
+            "title": "Lamp Seen From The Door",
+            "text": "The machine SHALL show the refill lamp to anyone standing at the kitchen door.",
+            "file": "requirements/01-tank.shall.yaml",
+            "line": 17,
+            "status": "implemented",
+            "effectiveStatus": "implemented",
+            "verify": "inspection"
+          }
+          ```
+
+          A retired id is answered with 404, the error, and the entry that retired it:
+
+          ```json
+          {
+            "error": "R4 was retired at requirements/01-tank.shall.yaml:27.",
+            "retired": {
+              "id": "R4",
+              "title": "Water Handling",
+              "file": "requirements/01-tank.shall.yaml",
+              "line": 27
+            }
+          }
+          ```
+      - id: T67.8
+        title: GET /api/sets/{set}/search?q={words}
+        text: |
+          What a reader typed names [R28]. A single word that names an item as an id
+          comes first with `"match": "id"`: an id of the set, or `name/id` of
+          another, where `name` is a name the manifest gives under `depends` or the
+          name of a set the server serves, matched exactly first and then in
+          capitals. Then come the items of the set whose id or title holds every
+          word, with `"match": "title"`, and those whose text does, with `"match":
+          "text"`, each group in reading order, ignoring case. At most 50 are listed,
+          and `more` counts the rest.
+
+          When nothing is found, `message` says why: that no item holds the words, or,
+          for a word written as an id or as `name/id` and for a retired id, what the
+          id names.
+
+          ```json
+          {
+            "version": "dm7japskbab4.1",
+            "query": "lamp",
+            "results": [
+              {
+                "match": "title",
+                "id": "R3.1",
+                "state": "item",
+                "set": "coffee",
+                "title": "Refill Lamp",
+                "file": "requirements/01-tank.shall.yaml"
+              },
+              {
+                "match": "title",
+                "id": "R3.1.1",
+                "state": "item",
+                "set": "coffee",
+                "title": "Lamp Seen From The Door",
+                "file": "requirements/01-tank.shall.yaml"
+              }
+            ]
+          }
+          ```
+
+          ```json
+          {
+            "version": "dm7japskbab4.1",
+            "query": "R4",
+            "results": [],
+            "message": "R4 was retired at requirements/01-tank.shall.yaml:27."
+          }
+          ```
+      - id: T67.9
+        title: GET /api/events
+        text: |
+          A stream of server-sent events. The server sends the current version as
+          soon as the stream opens, and the new one each time the files change [R29]:
+
+          ```text
+          event: version
+          data: dm7japskbab4.1
+          ```
+
+          A client that sees a version other than the one its answers carry fetches
+          them again.
+        links:
+          - url: https://html.spec.whatwg.org/multipage/server-sent-events.html
+            title: Server-sent events
+      - id: T67.10
+        title: The Dump
+        text: |
+          `shall dump [directory]` prints to standard output one JSON document
+          with what the server would answer for every set under the directory
+          [R74]:
+
+          | Key | Holds |
+          |---|---|
+          | `sets` | Each set the server would serve, as its set answers it [T67.5], but with every file holding all its items, as the file answers it [T67.6] |
+          | `clashes` | The names several sets share, each with their manifests; no set is dumped under such a name |
+          | `findings` | The findings that belong to no set dumped |
+
+          Nothing in a dump carries `version`, the version of the files a
+          running server has read.
+  - id: R36
+    title: An API For Scripts And Agents
+    text: The server SHALL offer everything its pages show of a set as JSON over HTTP.
+    rationale: A script or an agent then reads a set as the page does, with its ids resolved,
+      its statuses worked out and its findings placed, without parsing YAML or HTML.
+    serves: [N55.1, N53.3]
+    status: implemented
+    children:
+      - id: R36.1
+        title: The Page Uses Only The API
+        text: The page SHALL take everything it shows of a set from the API.
+        rationale: The API then cannot fall behind what readers see.
+        status: implemented
+      - id: R36.2
+        title: The API Described
+        text: The repository's own set SHALL describe each resource of the API, with an example of
+          its answer.
+        rationale: A script's author then learns the API where the promises it keeps are read
+          [T67].
+        verify: inspection
+        status: implemented
+      - id: R36.3
+        title: Reads Only
+        text: The server SHALL NOT change any file.
+        rationale: Reading a set then never alters it, whoever reads it and however.
+        serves: [N62.1]
+        verify: inspection
+        status: implemented
+  - id: T68
+    title: A Static Copy
+    text: |
+      `shall export` writes what `shall serve` would show as files that any web
+      host serves as they are [R60]:
+
+      - every answer of the API [T67] that stays the same while the files do, each
+        as a file named by its address with `.json` added: `api/sets.json`,
+        `api/sets/{set}.json`, `api/sets/{set}/files/{path}.json` and
+        `api/sets/{set}/items/{id}.json`, the last also for each retired id,
+        holding the 404 answer the server would send;
+      - the page at every address a reader can open: `index.html` for the start,
+        `{set}/index.html` for each set and `{set}/{id}.html` for each item, and
+        `404.html` for any other address, which a host such as GitHub Pages serves
+        for the addresses it lacks.
+
+      The answers' `version` is `copy`. Search and events have no files: the
+      copy's page searches the copy's files as the server would [R60.1], reading
+      `depends` in the set's answer for the names it gives other sets, and nothing
+      changes while it is open [R60.4].
+
+      A set's folders are named by its name as it is; a name that cannot name a
+      folder, such as one holding `/`, fails the export. An id has a file when it
+      names an item or is retired itself. The server also answers an id retired
+      only with an ancestor, or written with another letter at a retired path; in
+      a copy such an id has no file, and the page says no item has it.
+
+      `-base` is the path the host serves the copy under, `/` by default [R60.2].
+      GitHub Pages serves a project's site under `/{repository}/`, where this
+      repository publishes its own set [R61]. A static host sends no headers of the
+      copy's choosing, so the page carries its policy in a meta tag, which cannot
+      keep it out of frames.
+  - id: R60
+    title: A Static Copy
+    text: When asked to export, the tool SHALL write a copy of the pages it would serve for the
+      sets under the given directory, the current one by default, as files that any web host
+      serves as they are.
+    rationale: A reader then opens a set from a link, such as one in a README to a site on
+      GitHub Pages, without installing shall or running a server. Every answer the page reads
+      but a search's is fixed for one version of the files, so the copy holds each as a file.
+      Running the server's Go in the page, compiled to WebAssembly, was not taken; the page's
+      policy would have to let WebAssembly run, and a reader would load about 2 MB before the
+      first page.
+    serves: [N53.3]
+    status: implemented
+    children:
+      - id: R60.1
+        title: Searched In The Page
+        text: The copy's page SHALL find what the reader enters as the server's search would,
+          from the copy's files.
+        rationale: A static host runs nothing, and the copy already holds every item's id, title
+          and text.
+        status: implemented
+      - id: R60.2
+        title: Served Under A Path
+        text: Where its command line gives a path, the tool SHALL write a copy that works served
+          under that path, such as /shall/ for a GitHub project's site.
+        status: implemented
+      - id: R60.3
+        title: Nothing Overwritten
+        text: If the directory to write into holds anything, then the tool SHALL write nothing and
+          say so.
+        rationale: A mistyped directory then costs nothing, and the tool never has to delete.
+        status: implemented
+      - id: R60.4
+        title: Still While Open
+        text: The copy's page SHALL show the files as they stood when the copy was written.
+        rationale: A static host has no stream of changes to send; a new copy shows new files.
+        status: implemented
+  - id: R74
+    title: A Dump For Scripts
+    text: When asked to dump, the tool SHALL print to standard output one JSON document holding
+      every set under the given directory, the current one by default, each with every file and
+      item as the server answers them.
+    rationale: A script or an agent then reads everything a set says, with ids resolved, statuses
+      worked out and findings placed, from one command and without a server [O49]. Built from
+      the server's answers, the dump cannot disagree with the page.
+    serves: [N55.1]
+    status: implemented

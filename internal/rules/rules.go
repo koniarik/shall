@@ -1,9 +1,12 @@
-// Package rules checks the rules of format 1 that hold within one set.
+// Package rules checks the rules of format 1 for one set, holding its
+// mirrors and its references to other sets against the sets it depends on.
 package rules
 
 import (
+	"cmp"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"shall/internal/finding"
@@ -12,10 +15,23 @@ import (
 	"shall/internal/tree"
 )
 
+// Dep is a set the manifest depends on, as the checker could read it.
+type Dep struct {
+	// Set is the set, or nil when it cannot be read.
+	Set *model.Set
+	// Why says why the set cannot be read.
+	Why string
+}
+
 type checker struct {
-	out     []finding.Finding
-	set     *model.Set
-	depends map[string]bool
+	out      []finding.Finding
+	set      *model.Set
+	manifest string
+	// depends holds the names the manifest depends on, in its order, and
+	// deps the sets they name.
+	depends  []string
+	depLines map[string]int
+	deps     map[string]Dep
 }
 
 var (
@@ -40,10 +56,11 @@ var local = map[string]bool{"ranking": true, "N stakeholders": true, "N serves":
 // itemKinds are the letters of the kinds of item.
 const itemKinds = "OSNRT"
 
-// Check returns the findings of the within-set rules for the set s, whose
-// manifest is at manifestPath.
-func Check(manifestPath string, manifest *tree.Node, s *model.Set) []finding.Finding {
-	c := &checker{set: s, depends: map[string]bool{}}
+// Check returns the findings of the rules for the set s, whose manifest is at
+// manifestPath, given the sets it depends on by the names the manifest gives
+// them.
+func Check(manifestPath string, manifest *tree.Node, s *model.Set, deps map[string]Dep) []finding.Finding {
+	c := &checker{set: s, manifest: manifestPath, depLines: map[string]int{}, deps: deps}
 	c.checkDepends(manifestPath, manifest)
 	c.checkMissionFile(manifestPath)
 	c.checkRetired()
@@ -57,6 +74,7 @@ func Check(manifestPath string, manifest *tree.Node, s *model.Set) []finding.Fin
 	for _, it := range s.Items {
 		c.checkItem(it)
 	}
+	c.checkMirrors()
 	return c.out
 }
 
@@ -73,9 +91,18 @@ func (c *checker) checkDepends(manifestPath string, manifest *tree.Node) {
 		return
 	}
 	for _, p := range deps.Pairs {
-		c.depends[p.Key] = true
-		c.add(finding.Error, manifestPath, p.KeyLine, "", "depends",
-			"set %q cannot be read, and the mirror rules need it; this checker does not yet read other sets", p.Key)
+		c.depends = append(c.depends, p.Key)
+		c.depLines[p.Key] = p.KeyLine
+		if d := c.deps[p.Key]; d.Set == nil {
+			c.add(finding.Error, manifestPath, p.KeyLine, "", "depends",
+				"set %q cannot be read, and the mirror rules need it: %s", p.Key, cmp.Or(d.Why, "nothing was read for it"))
+		}
+		if g := p.Value.Get("git"); g != nil {
+			if address, ok := g.Str(); ok && set.Credentials(address) {
+				c.add(finding.Warning, manifestPath, g.Line, "", "depends",
+					"the address of %q carries credentials, which anyone who reads the repository can use; leave them to git, such as through a credential helper", p.Key)
+			}
+		}
 	}
 }
 
@@ -173,37 +200,138 @@ func (c *checker) ref(r model.Ref, key string) {
 	if r.Citation {
 		kinds, onlyHere, sev = itemKinds, false, finding.Warning
 	}
+	if r.Field == "mirrors" && !r.Citation {
+		// A mirror stands for an item of its own kind.
+		kinds = string(r.From.Kind)
+	}
 	file, line, id := r.File.Path, r.Node.Line, r.ID
-	if strings.Contains(id, "/") {
-		name, _, _ := strings.Cut(id, "/")
-		switch {
-		case onlyHere:
-			c.add(sev, file, line, from, r.Field, "%s names another set; %s names items of this set only", id, r.Field)
-		case !c.depends[name]:
-			c.add(sev, file, line, from, r.Field, "%s names set %q, which the manifest does not depend on", id, name)
-		}
+	name, local, other := strings.Cut(id, "/")
+	switch {
+	case !other && r.Field == "mirrors" && !r.Citation:
+		c.add(sev, file, line, from, r.Field, "%s is an item of this set; mirrors names one of a set the manifest depends on, as name/id", id)
+		return
+	case !other:
+		c.resolve(c.set, "this set", id, r, kinds, sev)
+		return
+	case onlyHere:
+		c.add(sev, file, line, from, r.Field, "%s names another set; %s names items of this set only", id, r.Field)
+		return
+	case !slices.Contains(c.depends, name):
+		c.add(sev, file, line, from, r.Field, "%s names set %q, which the manifest does not depend on", id, name)
 		return
 	}
-	if e := c.set.RetiredWith(id); e != nil {
+	if dep := c.deps[name].Set; dep != nil {
+		c.resolve(dep, fmt.Sprintf("set %q", name), local, r, kinds, sev)
+	}
+}
+
+// resolve checks that id names an item of s of one of kinds, for the
+// reference r; in names s in a message.
+func (c *checker) resolve(s *model.Set, in, id string, r model.Ref, kinds string, sev finding.Severity) {
+	from := ""
+	if r.From != nil {
+		from = r.From.ID
+	}
+	file, line, written := r.File.Path, r.Node.Line, r.ID
+	if e := s.RetiredWith(id); e != nil {
 		if model.Path(e.ID) == model.Path(id) && e.ID != id {
-			c.add(sev, file, line, from, r.Field, "%s names the path of %s, retired at %s:%d; the letter does not match", id, e.ID, e.File.Path, e.Line)
+			c.add(sev, file, line, from, r.Field, "%s names the path of %s, retired at %s:%d; the letter does not match", written, e.ID, e.File.Path, e.Line)
 			return
 		}
-		c.add(finding.Warning, file, line, from, r.Field, "%s is retired, at %s:%d", id, e.File.Path, e.Line)
+		c.add(finding.Warning, file, line, from, r.Field, "%s is retired, at %s:%d", written, e.File.Path, e.Line)
 		return
 	}
-	target := c.set.Item(id)
+	target := s.Item(id)
 	if target == nil {
-		if other := c.set.AtPath(id); other != nil {
-			c.add(sev, file, line, from, r.Field, "%s names the path of %s, at %s:%d; the letter does not match", id, other.ID, other.File.Path, other.Node.Line)
+		if other := s.AtPath(id); other != nil {
+			c.add(sev, file, line, from, r.Field, "%s names the path of %s, at %s:%d; the letter does not match", written, other.ID, other.File.Path, other.Node.Line)
 			return
 		}
-		c.add(sev, file, line, from, r.Field, "%s is no item of this set", id)
+		c.add(sev, file, line, from, r.Field, "%s is no item of %s", written, in)
 		return
 	}
 	if !strings.ContainsRune(kinds, rune(target.Kind)) {
-		c.add(sev, file, line, from, r.Field, "%s cannot be named in %s", id, r.Field)
+		c.add(sev, file, line, from, r.Field, "%s cannot be named in %s", written, r.Field)
 	}
+}
+
+// checkMirrors holds the set's mirrors against the sets it depends on: every
+// item of each, topics aside, has one mirror here, which keeps its title and
+// sits under the mirror of the nearest item above it.
+func (c *checker) checkMirrors() {
+	mirrorOf := map[string]*model.Item{}
+	for _, it := range c.set.Items {
+		n := it.Node.Get("mirrors")
+		target, ok := n.Str()
+		name, local, other := strings.Cut(target, "/")
+		dep := c.deps[name].Set
+		if !ok || !other || dep == nil || c.set.Item(it.ID) != it || !slices.Contains(c.depends, name) {
+			continue
+		}
+		x := dep.Item(local)
+		if x == nil || x.Kind != it.Kind || dep.RetiredWith(local) != nil {
+			continue // the reference itself is wrong, and ref says so
+		}
+		if first := mirrorOf[target]; first != nil {
+			c.add(finding.Error, it.File.Path, n.Line, it.ID, "mirrors", "%s already has a mirror, %s at %s:%d; an item has one", target, first.ID, first.File.Path, first.Node.Line)
+			continue
+		}
+		mirrorOf[target] = it
+		if title := it.Title(); title != x.Title() {
+			c.add(finding.Warning, it.File.Path, lineOf(it, "title"), it.ID, "title", "%s is titled %q; its mirror keeps the title", target, x.Title())
+		}
+		if p := aboveTopics(x); p != nil {
+			q := aboveTopics(it)
+			want := name + "/" + p.ID
+			if got, _ := mirrors(q); got != want {
+				c.add(finding.Warning, it.File.Path, n.Line, it.ID, "mirrors", "%s sits under %s, so its mirror sits under the mirror of %s", target, want, want)
+			}
+		}
+	}
+	for _, name := range c.depends {
+		dep := c.deps[name].Set
+		if dep == nil {
+			continue
+		}
+	items:
+		for _, x := range dep.Items {
+			if x.Kind == 'T' || dep.Item(x.ID) != x || mirrorOf[name+"/"+x.ID] != nil {
+				continue
+			}
+			for a := x.Parent; a != nil; a = a.Parent {
+				if m := mirrorOf[name+"/"+a.ID]; m != nil && m.Kind == 'R' && m.Waived() {
+					continue items
+				}
+			}
+			c.add(finding.Warning, c.manifest, c.depLines[name], "", "depends", "%s/%s %s has no mirror in this set", name, x.ID, x.Title())
+		}
+	}
+}
+
+// aboveTopics returns the nearest item above it that is not a topic, or nil.
+func aboveTopics(it *model.Item) *model.Item {
+	for p := it.Parent; p != nil; p = p.Parent {
+		if p.Kind != 'T' {
+			return p
+		}
+	}
+	return nil
+}
+
+// mirrors returns the name/id an item mirrors, if it mirrors one.
+func mirrors(it *model.Item) (string, bool) {
+	if it == nil {
+		return "", false
+	}
+	return it.Node.Get("mirrors").Str()
+}
+
+// lineOf returns the line of an item's field, or of the item.
+func lineOf(it *model.Item, field string) int {
+	if n := it.Node.Get(field); n != nil {
+		return n.Line
+	}
+	return it.Node.Line
 }
 
 func (c *checker) checkItem(it *model.Item) {
@@ -250,7 +378,7 @@ func (c *checker) checkNeed(it *model.Item) {
 
 func (c *checker) checkRequirement(it *model.Item) {
 	file := it.File.Path
-	if it.Above() == nil && it.Node.Get("serves") == nil {
+	if it.Above() == nil && it.Node.Get("serves") == nil && !it.Waived() {
 		c.add(finding.Warning, file, it.Node.Line, it.ID, "serves", "the requirement serves nothing")
 	}
 	if it.Node.Get("status") == nil && (it.Parent == nil || !it.Parent.Waived()) {

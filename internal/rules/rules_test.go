@@ -23,19 +23,35 @@ items:
 
 func run(t *testing.T, manifest string, files map[string]string) []finding.Finding {
 	t.Helper()
+	return runWith(t, manifest, files, nil)
+}
+
+// runWith checks a set given the files of the sets it depends on, by the
+// names its manifest gives them.
+func runWith(t *testing.T, manifest string, files map[string]string, deps map[string]map[string]string) []finding.Finding {
+	t.Helper()
 	m, err := tree.Parse([]byte(manifest))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var parsed []*model.File
+	read := map[string]Dep{}
+	for name, depFiles := range deps {
+		read[name] = Dep{Set: parsed(t, name+"/", depFiles)}
+	}
+	return Check("shall.yaml", m, parsed(t, "", files), read)
+}
+
+func parsed(t *testing.T, dir string, files map[string]string) *model.Set {
+	t.Helper()
+	var out []*model.File
 	for path, src := range files {
 		n, err := tree.Parse([]byte(src))
 		if err != nil {
 			t.Fatalf("%s: %v", path, err)
 		}
-		parsed = append(parsed, &model.File{Path: path, Tree: n})
+		out = append(out, &model.File{Path: dir + path, Tree: n})
 	}
-	return Check("shall.yaml", m, model.New(parsed))
+	return model.New(out)
 }
 
 func chapter(src string) map[string]string {
@@ -160,6 +176,19 @@ func TestDependenciesCannotBeRead(t *testing.T) {
 	}
 }
 
+func TestCredentialsInADependencyAddress(t *testing.T) {
+	t.Attr("verifies", "R2")
+	t.Attr("verifies", "R15")
+	got := run(t, "name: x\nformat: 1\ndepends:\n  company: {git: \"https://ghp_secret@example.com/s\", rev: v1}\n  team: {git: \"https://example.com/t\", rev: v1}\n", chapter(
+		"  - {id: R1, title: A, text: The tool SHALL work., serves: [N91.1], status: draft}\n"))
+	expect(t, got, finding.Warning, "", `"company" carries credentials`)
+	for _, f := range got {
+		if strings.Contains(f.Message, "ghp_secret") || strings.Contains(f.Message, `"team" carries`) {
+			t.Errorf("finding %+v shows the credentials, or warns of an address without them", f)
+		}
+	}
+}
+
 func TestRequirements(t *testing.T) {
 	t.Attr("verifies", "R2")
 	got := run(t, "name: x\nformat: 1\n", chapter(`  - {id: R1, title: A, text: The tool works., status: draft}
@@ -176,7 +205,6 @@ func TestRequirements(t *testing.T) {
   - id: R6
     title: G
     text: The tool SHALL work.
-    serves: [N91.1]
     status: waived
     children:
       - {id: R6.1, title: H, text: The tool SHALL work.}
@@ -188,8 +216,8 @@ func TestRequirements(t *testing.T) {
 	expect(t, got, finding.Warning, "R4", "none of the sentence forms")
 	expect(t, got, finding.Error, "R5.1", `"status" is missing`)
 	for _, f := range got {
-		if f.ID == "R6.1" {
-			t.Errorf("finding on R6.1 = %+v, want none: a child of a waived requirement needs no status", f)
+		if f.ID == "R6" || f.ID == "R6.1" {
+			t.Errorf("finding on %s = %+v, want none: a waived requirement need serve nothing, and its child needs no status", f.ID, f)
 		}
 	}
 }
@@ -233,7 +261,7 @@ items:
 		"c.shall.yaml": "title: C\nitems:\n  - {id: R3, title: A, text: The tool SHALL work., serves: [S2, T4], status: draft}\n",
 	})
 	expect(t, got, finding.Error, "N2.1", "O1 cannot be named in stakeholders")
-	expect(t, got, finding.Error, "N2.2", "R3 cannot be named in mirrors")
+	expect(t, got, finding.Error, "N2.2", "R3 is an item of this set; mirrors names one of a set the manifest depends on")
 	expect(t, got, finding.Error, "R3", "S2 cannot be named in serves")
 	expect(t, got, finding.Error, "R3", "T4 cannot be named in serves")
 }
@@ -413,6 +441,93 @@ retired:
 		}
 		if strings.Contains(f.Message, "[T2]") || strings.Contains(f.Message, "T2 cannot be named") {
 			t.Errorf("finding = %+v, want a topic citable", f)
+		}
+	}
+}
+
+func TestMirrorsAreHeldAgainstTheSetDependedOn(t *testing.T) {
+	t.Attr("verifies", "R2")
+	t.Attr("verifies", "R2.4")
+	std := map[string]string{
+		"mission.shall.yaml": `title: Standard
+mission: m
+items:
+  - {id: O1, title: Safe, text: Nothing breaks., measure: incidents}
+  - id: S2
+    title: Operator
+    text: Runs the product.
+    children:
+      - {id: N2.1, title: Know The State, text: Know what state it is in., serves: [O1], status: hypothesis}
+      - {id: N2.2, title: Know The Cause, text: Know why it stopped., serves: [O1], status: hypothesis}
+`,
+		"c.shall.yaml": `title: Rules
+items:
+  - id: T3
+    title: Logs
+    text: What a log holds.
+    children:
+      - id: R3.1
+        title: Logged
+        text: The product SHALL log every change.
+        serves: [N2.1]
+        status: approved
+        children:
+          - {id: R3.1.1, title: Logged Daily, text: The product SHALL rotate its log daily., status: approved}
+  - id: R4
+    title: Signed
+    text: The product SHALL sign its releases.
+    serves: [N2.1]
+    status: approved
+    children:
+      - {id: R4.1, title: Signed Twice, text: The product SHALL sign each release twice., status: approved}
+retired:
+  - {id: R6, title: Gone}
+`,
+	}
+	got := runWith(t, "name: p\nformat: 1\ndepends:\n  std: {path: std}\n", map[string]string{
+		"mission.shall.yaml": `title: M
+mission: m
+items:
+  - {id: O1, title: Safe, text: Nothing breaks here., measure: incidents, mirrors: std/O1}
+  - id: S2
+    title: Operator Of P
+    text: Runs P.
+    mirrors: std/S2
+    children:
+      - {id: N2.1, title: Know The State, text: Know what state P is in., serves: [O1], status: hypothesis, mirrors: std/N2.1}
+  - {id: N3, title: Know The State, stakeholders: [S2], text: Know it again., serves: [O1], status: hypothesis, mirrors: std/N2.1}
+  - {id: N4, title: Know The Cause, stakeholders: [S2], text: Know why P stopped., serves: [O1], status: hypothesis, mirrors: std/N2.2}
+`,
+		"c.shall.yaml": `title: C
+items:
+  - {id: R5, title: Logged, text: The tool SHALL log every change., serves: [N2.1], status: approved, mirrors: std/R3.1}
+  - {id: R6, title: Signed, text: The tool SHALL sign its releases., serves: [std/N2.1], status: waived, mirrors: std/R4}
+  - {id: R7, title: X, text: The tool SHALL x., serves: [std/N9], status: draft}
+  - {id: R8, title: Y, text: The tool SHALL y., serves: [N2.1], status: draft, mirrors: std/S2}
+  - {id: R9, title: Gone, text: The tool SHALL z., serves: [N2.1], status: draft, mirrors: std/R6}
+  - id: R10
+    title: Cited
+    text: "The tool SHALL keep what [std/R4] asks, and [std/R99]."
+    serves: [N2.1]
+    status: draft
+`,
+	}, map[string]map[string]string{"std": std})
+	expect(t, got, finding.Warning, "", "std/R3.1.1 Logged Daily has no mirror in this set")
+	expect(t, got, finding.Warning, "S2", `std/S2 is titled "Operator"; its mirror keeps the title`)
+	expect(t, got, finding.Error, "N3", "std/N2.1 already has a mirror, N2.1 at mission.shall.yaml")
+	expect(t, got, finding.Warning, "N4", "std/N2.2 sits under std/S2, so its mirror sits under the mirror of std/S2")
+	expect(t, got, finding.Error, "R7", `std/N9 is no item of set "std"`)
+	expect(t, got, finding.Error, "R8", "std/S2 cannot be named in mirrors")
+	expect(t, got, finding.Warning, "R9", "std/R6 is retired")
+	expect(t, got, finding.Warning, "R10", `std/R99 is no item of set "std"`)
+	for _, f := range got {
+		switch {
+		case strings.Contains(f.Message, "std/R4.1"):
+			t.Errorf("finding %+v; nothing below a requirement mirrored as waived needs a mirror", f)
+		case strings.Contains(f.Message, "cannot be read"), f.ID == "R5", f.ID == "R6", f.ID == "N2.1", f.ID == "O1":
+			t.Errorf("finding %+v, want none: the mirror and its references hold", f)
+		case strings.Contains(f.Message, "[std/R4]"), strings.Contains(f.Message, "std/R4 is"):
+			t.Errorf("finding %+v, want none: std/R4 is there to cite", f)
 		}
 	}
 }

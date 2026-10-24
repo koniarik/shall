@@ -146,6 +146,13 @@ func TestACopyIsWrittenOnlyIntoANewOrEmptyDirectory(t *testing.T) {
 	if err := Export(root, t.TempDir(), "/"); err != nil {
 		t.Errorf("Export refused an empty directory: %v", err)
 	}
+	site := filepath.Join(t.TempDir(), "site")
+	if err := Export(t.TempDir(), site, "/"); err == nil || !strings.Contains(err.Error(), "no shall.yaml") {
+		t.Errorf("Export of a directory with no set = %v, want that it holds no shall.yaml", err)
+	}
+	if _, err := os.Stat(site); err == nil {
+		t.Error("Export wrote a copy of a directory with no set")
+	}
 	for _, base := range []string{"", "shall/", "/shall", "/a b/", `/"/`, "//"} {
 		if err := Export(root, filepath.Join(t.TempDir(), "site"), base); err == nil {
 			t.Errorf("Export took the base %q", base)

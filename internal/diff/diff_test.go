@@ -316,7 +316,7 @@ func TestSetFilesElsewhereInTheRepository(t *testing.T) {
 }
 
 func TestNothingReadFromOutsideTheRepository(t *testing.T) {
-	t.Attr("verifies", "R37.3.1")
+	t.Attr("verifies", "R73")
 	dir := testfile.Repo(t)
 	testfile.WriteFile(t, filepath.Join(dir, "..", "outside", "mission.shall.yaml"), mission)
 	testfile.Commit(t, dir, map[string]string{"shall.yaml": "name: x\nformat: 1\npath: ../outside\n"})
@@ -404,9 +404,9 @@ func TestATopicsMarkdown(t *testing.T) {
 }
 
 func TestSubmodulesAsTheirFiles(t *testing.T) {
-	t.Attr("verifies", "R37.3.2")
-	t.Attr("verifies", "R37.3.2.1")
-	t.Attr("verifies", "R37.3.2.2")
+	t.Attr("verifies", "R72")
+	t.Attr("verifies", "R72.1")
+	t.Attr("verifies", "R72.2")
 	sub := testfile.Repo(t)
 	testfile.Commit(t, sub, map[string]string{
 		"shall.yaml":         "name: x\nformat: 1\n",
@@ -807,5 +807,54 @@ func TestATreeStaysInItsDirectory(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "outside")); !os.IsNotExist(err) {
 		t.Errorf("a file outside the directory: %v, want none", err)
+	}
+}
+
+func TestCredentialsInAnAddressAreNeverShown(t *testing.T) {
+	t.Attr("verifies", "R15")
+	dir := testfile.Repo(t)
+	base := testfile.Commit(t, dir, map[string]string{"shall.yaml": "name: x\nformat: 1\n", "mission.shall.yaml": mission})
+	head := testfile.Commit(t, dir, map[string]string{
+		"shall.yaml": "name: x\nformat: 1\ndepends:\n  company:\n    git: https://bot:ghp_secret@example.com/standards\n    rev: v1\n",
+	})
+	r := compare(t, dir, base, head)
+	var text bytes.Buffer
+	if err := WriteText(&text, r); err != nil {
+		t.Fatal(err)
+	}
+	asJSON, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, out := range []string{text.String(), string(asJSON)} {
+		if strings.Contains(out, "ghp_secret") || strings.Contains(out, "bot:") || !strings.Contains(out, "https://***@example.com/standards") {
+			t.Errorf("the diff shows the address's credentials, or not the address at all:\n%s", out)
+		}
+	}
+}
+
+func TestASetDependedOnIsReadAtTheSameRef(t *testing.T) {
+	t.Attr("verifies", "R2.4")
+	dir := testfile.Repo(t)
+	base := testfile.Commit(t, dir, map[string]string{
+		"std/shall.yaml":             "name: standard\nformat: 1\n",
+		"std/mission.shall.yaml":     "title: S\nmission: m\nitems:\n  - {id: O1, title: Safe, text: Nothing breaks., measure: incidents}\n",
+		"product/shall.yaml":         "name: p\nformat: 1\ndepends:\n  std: {path: std}\n",
+		"product/mission.shall.yaml": "title: P\nmission: m\nitems:\n  - {id: O1, title: Safe, text: Nothing breaks here., measure: incidents, mirrors: std/O1}\n",
+	})
+	head := testfile.Commit(t, dir, map[string]string{
+		"std/mission.shall.yaml": "title: S\nmission: m\nitems:\n  - {id: O1, title: Safe, text: Nothing breaks., measure: incidents}\n  - {id: O2, title: Fast, text: Nothing waits., measure: waits}\n",
+	})
+	r := compare(t, dir, base, head)
+	var gained []string
+	for _, s := range r.Sets {
+		if s.Name == "p" && s.Findings != nil {
+			for _, f := range s.Findings.New {
+				gained = append(gained, f.Message)
+			}
+		}
+	}
+	if len(gained) != 1 || gained[0] != "std/O2 Fast has no mirror in this set" {
+		t.Errorf("the product gained %q, want only that std/O2 has no mirror", gained)
 	}
 }

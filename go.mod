@@ -17,3 +17,8 @@ require (
 	golang.org/x/image v0.21.0 // indirect
 	golang.org/x/text v0.19.0 // indirect
 )
+
+// go-graphviz, changed so that Graphviz starts only when a diagram is drawn
+// and its compiled code stays in memory; third_party/go-graphviz/README.shall.md
+// says why.
+replace github.com/goccy/go-graphviz => ./third_party/go-graphviz

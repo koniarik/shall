@@ -26,8 +26,8 @@ var (
 // its static files, and every answer the page reads, each a JSON file
 // named by its address with .json added. Every address a reader can open
 // has a copy of the page, and 404.html is one for any other. out must be
-// new or empty: Export never deletes. A served set whose name cannot name a
-// folder of the copy fails the export.
+// new or empty: Export never deletes. A root that holds no set, or a served
+// set whose name cannot name a folder of the copy, fails the export.
 func Export(root, out, base string) error {
 	if !basePath.MatchString(base) {
 		return fmt.Errorf("the base %q is not a path that begins and ends with /, such as /shall/", base)
@@ -35,6 +35,10 @@ func Export(root, out, base string) error {
 	if entries, err := os.ReadDir(out); err == nil && len(entries) > 0 {
 		return fmt.Errorf("%s is not empty", out)
 	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	snap := load(root, "copy")
+	if err := snap.none(root, "export"); err != nil {
 		return err
 	}
 	w := writer{out: out}
@@ -56,7 +60,6 @@ func Export(root, out, base string) error {
 	}); err != nil {
 		return err
 	}
-	snap := load(root, "copy")
 	w.json("api/sets.json", snap.list())
 	for _, sv := range snap.sets {
 		if !sv.served {
@@ -147,4 +150,17 @@ func (w *writer) json(name string, v any) {
 		return
 	}
 	w.file(name, append(data, '\n'))
+}
+
+// none fails when the snapshot holds no set, saying why, for the command
+// named that needs one.
+func (snap *snapshot) none(root, command string) error {
+	if len(snap.sets) > 0 {
+		return nil
+	}
+	var why []string
+	for _, f := range snap.outside {
+		why = append(why, f.Message)
+	}
+	return fmt.Errorf("there is no set under %s to %s: %s", root, command, strings.Join(why, "; "))
 }

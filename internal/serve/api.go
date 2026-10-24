@@ -86,7 +86,9 @@ type clashJSON struct {
 }
 
 type setAnswer struct {
-	Version  string `json:"version"`
+	// Version is left out of a dump, which is no answer of a running
+	// server.
+	Version  string `json:"version,omitempty"`
 	Name     string `json:"name"`
 	Manifest string `json:"manifest"`
 	// Requirements counts the set's requirements by effective status.
@@ -163,20 +165,23 @@ type itemJSON struct {
 	Line  int    `json:"line"`
 	// Status is the status as written; EffectiveStatus is a requirement's
 	// lowest status counting its children.
-	Status          string            `json:"status,omitempty"`
-	EffectiveStatus string            `json:"effectiveStatus,omitempty"`
-	Measure         string            `json:"measure,omitempty"`
-	Stakeholders    []refJSON         `json:"stakeholders,omitempty"`
-	Serves          []refJSON         `json:"serves,omitempty"`
-	Rationale       string            `json:"rationale,omitempty"`
-	Verify          string            `json:"verify,omitempty"`
-	Notes           []string          `json:"notes,omitempty"`
-	Links           []linkJSON        `json:"links,omitempty"`
-	Mirrors         *refJSON          `json:"mirrors,omitempty"`
-	NamedBy         []namedByJSON     `json:"namedBy,omitempty"`
-	Findings        []finding.Finding `json:"findings,omitempty"`
-	Retired         []retiredJSON     `json:"retired,omitempty"`
-	Children        []*itemJSON       `json:"children,omitempty"`
+	Status          string `json:"status,omitempty"`
+	EffectiveStatus string `json:"effectiveStatus,omitempty"`
+	Measure         string `json:"measure,omitempty"`
+	// Rank is an objective's place in the mission's ranking, from 1, where
+	// the ranking lists it.
+	Rank         int               `json:"rank,omitempty"`
+	Stakeholders []refJSON         `json:"stakeholders,omitempty"`
+	Serves       []refJSON         `json:"serves,omitempty"`
+	Rationale    string            `json:"rationale,omitempty"`
+	Verify       string            `json:"verify,omitempty"`
+	Notes        []string          `json:"notes,omitempty"`
+	Links        []linkJSON        `json:"links,omitempty"`
+	Mirrors      *refJSON          `json:"mirrors,omitempty"`
+	NamedBy      []namedByJSON     `json:"namedBy,omitempty"`
+	Findings     []finding.Finding `json:"findings,omitempty"`
+	Retired      []retiredJSON     `json:"retired,omitempty"`
+	Children     []*itemJSON       `json:"children,omitempty"`
 	// Requirements counts a topic's requirements, all below it, by effective
 	// status.
 	Requirements *statusCounts `json:"requirements,omitempty"`
@@ -363,6 +368,12 @@ func (b builder) item(it *model.Item) *itemJSON {
 	switch it.Kind {
 	case 'O':
 		v.Measure, _ = n.Get("measure").Str()
+		for i, r := range b.sv.Set.Ranking() {
+			if r.ID == it.ID {
+				v.Rank = i + 1
+				break
+			}
+		}
 	case 'N':
 		v.Status = it.Status()
 		if list := n.Get("stakeholders"); list != nil && list.Kind == tree.Seq {

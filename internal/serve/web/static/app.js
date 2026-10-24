@@ -326,6 +326,16 @@ function dotDiagram(b) {
   return h('figure', {'class': 'diagram dot', 'data-drawn': 'true'}, document.importNode(svg, true));
 }
 
+// ranked returns how many objectives the mission's ranking lists.
+function ranked() {
+  return state.set?.files.find((f) => f.kind === 'mission')?.ranking?.length ?? 0;
+}
+
+// kindNames are the kinds of item as a reader names them.
+const kindNames = {
+  objective: 'objective', stakeholder: 'stakeholder class', need: 'need', requirement: 'requirement', topic: 'topic',
+};
+
 function item(it, level) {
   const requirement = it.kind === 'requirement';
   const cites = it.cites ?? {};
@@ -367,7 +377,8 @@ function item(it, level) {
   },
       h('div', {'class': 'head', 'role': 'heading', 'aria-level': Math.min(level, 6)},
           ref({id: it.id, state: 'item', set: state.set.name, file: it.file}, false), ' ',
-          h('span', {class: 'title'}, it.title), ' ', status(it),
+          h('span', {class: 'title'}, it.title), ' ', h('span', {class: 'kind'}, kindNames[it.kind] ?? it.kind), ' ', status(it),
+          it.rank ? h('span', {class: 'rank'}, 'ranked ' + it.rank + ' of ' + ranked()) : null,
           it.requirements?.total ? h('span', {class: 'counts'}, statuses(it.requirements)) : null),
       it.serves?.length ? h('p', {class: 'serves'}, 'serves ', refs(it.serves, titled)) : null,
       it.blocks ? h('div', {class: 'text'}, blocks(it.blocks, level)) :
@@ -446,15 +457,11 @@ function section(entry) {
 // outlined lists items in the outline, each topic with the topics it holds
 // under it.
 function outlined(items, path) {
-  return items.map((it) => {
-    const topics = it.kind === 'topic' ? (it.children ?? []).filter((c) => c.kind === 'topic') : [];
-    return h('li', {class: 'pure-menu-item'},
-        h('a', {
-          'class': 'pure-menu-link', 'href': setBase(state.set.name) + encodeURIComponent(it.id),
-          'data-item': it.id, 'data-chapter': path, 'data-local': true,
-        }, h('span', {class: 'ref'}, it.id), ' ', it.title),
-        topics.length ? h('ul', {class: 'pure-menu-list'}, outlined(topics, path)) : null);
-  });
+  return items.map((it) => h('li', {class: 'pure-menu-item'},
+      h('a', {
+        'class': 'pure-menu-link', 'href': setBase(state.set.name) + encodeURIComponent(it.id),
+        'data-item': it.id, 'data-chapter': path, 'data-local': true,
+      }, h('span', {class: 'ref'}, it.id), ' ', it.title)));
 }
 
 function renderOutline() {

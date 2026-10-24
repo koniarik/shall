@@ -308,6 +308,8 @@ figure.dot svg [fill="black"], figure.dot svg text:not([fill]) { fill: currentCo
 .children { margin-left: 0.6rem; }
 
 .status { color: var(--muted); font-size: 0.85rem; }
+.item > .head .kind { color: var(--muted); font-size: 0.85rem; font-style: italic; }
+.item > .head .rank { color: var(--muted); font-size: 0.85rem; }
 
 details.more { margin: 0.2rem 0; font-size: 0.92rem; }
 details.more > summary { color: var(--muted); cursor: pointer; }

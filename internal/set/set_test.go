@@ -88,3 +88,26 @@ func TestAMissingRootIsAnError(t *testing.T) {
 		t.Fatal("no error for a missing directory")
 	}
 }
+
+func TestCredentialsInAnAddress(t *testing.T) {
+	t.Attr("verifies", "R15")
+	for _, c := range []struct {
+		address, redacted string
+	}{
+		{"https://github.com/acme/standards", "https://github.com/acme/standards"},
+		{"https://ghp_secret@github.com/acme/standards", "https://***@github.com/acme/standards"},
+		{"https://bot:ghp_secret@github.com/acme/standards.git", "https://***@github.com/acme/standards.git"},
+		{"http://user@example.com/s", "http://***@example.com/s"},
+		{"ssh://git@github.com/acme/standards", "ssh://git@github.com/acme/standards"},
+		{"ssh://git:secret@github.com/acme/standards", "ssh://***@github.com/acme/standards"},
+		{"git@github.com:acme/standards.git", "git@github.com:acme/standards.git"},
+		{"../standards", "../standards"},
+	} {
+		if got := Redacted(c.address); got != c.redacted {
+			t.Errorf("Redacted(%q) = %q, want %q", c.address, got, c.redacted)
+		}
+		if got, want := Credentials(c.address), c.redacted != c.address; got != want {
+			t.Errorf("Credentials(%q) = %v, want %v", c.address, got, want)
+		}
+	}
+}

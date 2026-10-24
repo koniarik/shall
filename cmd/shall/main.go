@@ -1,6 +1,6 @@
 // Command shall checks a product's mission, needs and requirements, compares
-// them between git refs, and serves them as documents or exports them as a
-// static copy.
+// them between git refs, and serves them as documents, exports them as a
+// static copy, or dumps them as one JSON document.
 package main
 
 import (
@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"shall/internal/check"
@@ -24,7 +25,8 @@ import (
 const usage = `usage: shall check [-json] [-warnings-as-errors] [directory]
        shall diff [-json] [-base ref] [-head ref] [directory]
        shall serve [-addr host:port] [directory]
-       shall export -out dir [-base path] [directory]`
+       shall export -out dir [-base path] [directory]
+       shall dump [directory]`
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -44,22 +46,37 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 			return runServe(ctx, args[1:], stdout, stderr)
 		case "export":
 			return runExport(args[1:], stderr)
+		case "dump":
+			return runDump(args[1:], stdout, stderr)
 		}
+		fmt.Fprintf(stderr, "shall: there is no command %q\n", args[0])
 	}
 	fmt.Fprintln(stderr, usage)
 	return 2
 }
 
-// directory returns the one directory argument, the current one by default.
+// directory returns the one directory argument, the current one by default,
+// once it is known to be a directory; otherwise it says why it is not.
 func directory(flags *flag.FlagSet, stderr io.Writer) (string, bool) {
+	dir := "."
 	switch flags.NArg() {
 	case 0:
-		return ".", true
 	case 1:
-		return flags.Arg(0), true
+		dir = flags.Arg(0)
+	default:
+		fmt.Fprintf(stderr, "shall: %s takes one directory, after its flags, not %s\n", flags.Name(), strings.Join(flags.Args(), " "))
+		fmt.Fprintln(stderr, usage)
+		return "", false
 	}
-	fmt.Fprintln(stderr, usage)
-	return "", false
+	switch st, err := os.Stat(dir); {
+	case err != nil:
+		fmt.Fprintln(stderr, "shall:", err)
+		return "", false
+	case !st.IsDir():
+		fmt.Fprintf(stderr, "shall: %s is not a directory\n", dir)
+		return "", false
+	}
+	return dir, true
 }
 
 func runDiff(args []string, stdout, stderr io.Writer) int {
@@ -108,12 +125,12 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {
 		fmt.Fprintln(stderr, "shall:", err)
-		return 1
+		return 2
 	}
 	fmt.Fprintf(stdout, "shall serves %s at http://%s/\n", root, openable(ln.Addr()))
 	if err := serve.Run(ctx, root, ln); err != nil {
 		fmt.Fprintln(stderr, "shall:", err)
-		return 1
+		return 2
 	}
 	return 0
 }
@@ -140,11 +157,22 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 	if !ok {
 		return 2
 	}
-	findings, err := check.Run(root)
+	results, findings, err := check.Sets(root)
 	if err != nil {
 		fmt.Fprintln(stderr, "shall:", err)
 		return 2
 	}
+	if len(results) == 0 {
+		// There is no set to check; the findings say why.
+		for _, f := range findings {
+			fmt.Fprintln(stderr, f)
+		}
+		return 2
+	}
+	for _, r := range results {
+		findings = append(findings, r.Findings...)
+	}
+	finding.Sort(findings)
 	nErrors, nWarnings := 0, 0
 	for _, f := range findings {
 		if f.Severity == finding.Error {
@@ -201,6 +229,23 @@ func runExport(args []string, stderr io.Writer) int {
 		return 2
 	}
 	if err := serve.Export(root, *out, *base); err != nil {
+		fmt.Fprintln(stderr, "shall:", err)
+		return 2
+	}
+	return 0
+}
+
+func runDump(args []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("dump", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	root, ok := directory(flags, stderr)
+	if !ok {
+		return 2
+	}
+	if err := serve.Dump(root, stdout); err != nil {
 		fmt.Fprintln(stderr, "shall:", err)
 		return 2
 	}

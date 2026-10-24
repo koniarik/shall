@@ -1,6 +1,57 @@
 ---
 title: Design
 items:
+  - id: T69
+    title: How The shall Tool Is Built
+    text: |
+      `shall` is one Go binary [R19], and its commands share one way of reading a set:
+
+      1. `internal/set` finds each manifest under the directory, and the files of
+         its set.
+      2. `internal/tree` reads each file's YAML with goccy/go-yaml, keeping the line
+         of every value [R20].
+      3. `internal/schema` checks each file's shape against the format's JSON
+         Schema [R21].
+      4. `internal/model` turns the files into items, with their ids, paths,
+         references and citations; a topic's Markdown is read by goldmark [R43].
+      5. `internal/rules` checks the format's rules within the set, and
+         `internal/check` gathers every finding of the set.
+
+      The commands build on that reading:
+
+      - `shall check` prints the findings [T64].
+      - `shall diff` reads the files of each ref from git's object store [R41],
+        reads each side as above, and compares them item by item, with git
+        finding the words that changed [R42].
+      - `shall serve` keeps a snapshot of every set, read again when a file changes
+        [R32.2], and answers the page and scripts in JSON [R31]. It draws DOT
+        diagrams with Graphviz inside the binary [R59], started only to draw one
+        [R59.2]; the page draws Mermaid's [R44].
+      - `shall export` writes the server's answers and its page as files [T68].
+
+      ```dot
+      digraph shall {
+        rankdir=LR
+        node [shape=box]
+        files [label="a set's files", shape=folder]
+        git [label="a git ref", shape=folder]
+        read [label="set, tree, schema,\nmodel, rules"]
+        check [label="shall check"]
+        diff [label="shall diff"]
+        serve [label="shall serve"]
+        export [label="shall export"]
+        page [label="the page", shape=note]
+        site [label="static files", shape=folder]
+        files -> read
+        git -> read [label="object store"]
+        read -> check [label="findings"]
+        read -> diff [label="two refs"]
+        read -> serve [label="snapshot"]
+        serve -> page [label="JSON"]
+        read -> export
+        export -> site [label="JSON and the page"]
+      }
+      ```
   - id: R19
     title: A Single Go Binary
     text: The tool SHALL be one binary, written in Go, that runs with nothing else installed but
@@ -82,34 +133,7 @@ items:
         rationale: go test with its json flag then reports each named requirement beside the
           result of the test that verifies it, so evidence tooling reads the link instead of
           parsing test names.
-        status: implemented
-  - id: R59
-    title: DOT Drawn By Graphviz
-    text: The server SHALL draw each DOT diagram of a topic with Graphviz, run inside its
-      binary, and send the drawing as SVG.
-    rationale: Graphviz lays out graphs Mermaid cannot, such as consumption left to right with
-      a node's children hanging below it in one column. Run inside the binary, through
-      goccy/go-graphviz, it needs no WebAssembly in the page, whose policy then stays as it is.
-      Graphviz in the page was not taken for needing that policy loosened; Viz.js's build in
-      plain JavaScript for being frozen since 2018; ELK, a layout engine in JavaScript, for not
-      being Graphviz, so that DOT's meaning would have to be built anew. go-graphviz compiles
-      Graphviz whenever the binary starts, which takes about a third of a second until its
-      cache in the temporary directory holds it, and some milliseconds after.
-    serves: [R26.16]
-    status: implemented
-    links:
-      - url: https://github.com/goccy/go-graphviz
-        title: go-graphviz
-      - url: https://graphviz.org/
-        title: Graphviz
-    children:
-      - id: R59.1
-        title: Drawings Cleaned
-        text: The server SHALL send of a drawing only its shapes, text and styles, without
-          scripts, links, images or anything that loads from elsewhere.
-        rationale: A DOT diagram can give a node a link or an image; the drawing the page puts
-          in then holds neither.
-        serves: [R7]
+        serves: [N54.1]
         status: implemented
   - id: R58
     title: Tested On Every Change
@@ -125,7 +149,7 @@ items:
     title: Its Own Set Published
     text: The repository SHALL publish a static copy of its own set on GitHub Pages on each push
       to its main branch, and link to it from its README.
-    rationale: A reader then sees what shall shows, on shall's own requirements as they stand on
+    rationale: A reader then sees what the tool shows, on its own requirements as they stand on
       main, before installing anything.
     serves: [R60]
     verify: inspection
@@ -299,8 +323,8 @@ items:
       released.
     rationale: Mermaid draws state machines, sequences of messages and flowcharts from text that
       diffs and reviews like the rest of a set, and GitHub and GitLab draw it in Markdown. D2
-      was not taken for being a large dependency few viewers know; Graphviz because it needs
-      dot installed beside the binary.
+      was not taken for being a large dependency few viewers know. The graphs Mermaid lays out
+      poorly are drawn by Graphviz on the server [R59].
     serves: [R26.16]
     verify: inspection
     status: implemented
@@ -329,4 +353,43 @@ items:
           diagram as an image instead was not taken because Mermaid still measures it in the page,
           and the image needs sizing of its own.
         serves: [R7]
+        status: implemented
+  - id: R59
+    title: DOT Drawn By Graphviz
+    text: The server SHALL draw each DOT diagram of a topic with Graphviz, run inside its
+      binary, and send the drawing as SVG.
+    rationale: Graphviz lays out graphs Mermaid cannot, such as consumption left to right with
+      a node's children hanging below it in one column. Run inside the binary, through
+      goccy/go-graphviz, it needs no WebAssembly in the page, whose policy then stays as it is.
+      Graphviz in the page was not taken for needing that policy loosened; Viz.js's build in
+      plain JavaScript for being frozen since 2018; ELK, a layout engine in JavaScript, for not
+      being Graphviz, so that DOT's meaning would have to be built anew.
+    serves: [R26.16]
+    status: implemented
+    links:
+      - url: https://github.com/goccy/go-graphviz
+        title: go-graphviz
+      - url: https://graphviz.org/
+        title: Graphviz
+    children:
+      - id: R59.1
+        title: Drawings Cleaned
+        text: The server SHALL send of a drawing only its shapes, text and styles, without
+          scripts, links, images or anything that loads from elsewhere.
+        rationale: A DOT diagram can give a node a link or an image; the drawing the page puts
+          in then holds neither.
+        serves: [R7]
+        status: implemented
+      - id: R59.2
+        title: Graphviz Started Only To Draw
+        text: The tool SHALL start Graphviz only to draw a diagram, and keep its compiled code in
+          memory.
+        rationale: A command that draws nothing, such as a check on every commit, then pays
+          nothing for Graphviz, and the tool writes no code where another user of the machine
+          could replace it. go-graphviz as released compiles Graphviz whenever a program that
+          links it starts, and keeps the compiled code in a directory under the temporary
+          directory that any user can write to, loading it back unchecked; the tool builds a copy
+          changed to do neither, kept in third_party/go-graphviz. Drawing then costs about half
+          a second, once per run.
+        serves: [N62.1]
         status: implemented

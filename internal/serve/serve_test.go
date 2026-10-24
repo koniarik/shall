@@ -947,3 +947,28 @@ func TestServeFailsWhenItCannotListen(t *testing.T) {
 		t.Error("serving on a closed listener did not fail")
 	}
 }
+
+func TestObjectivesComeWithTheirRank(t *testing.T) {
+	t.Attr("verifies", "R26.19")
+	root := testfile.Write(t, map[string]string{
+		"shall.yaml": "name: coffee\nformat: 1\n",
+		"mission.shall.yaml": `title: M
+mission: m
+ranking: [O2, O1]
+items:
+  - {id: O1, title: Safe, text: Nothing breaks., measure: incidents}
+  - id: O2
+    title: Fast
+    text: Nothing waits.
+    measure: waits
+    children:
+      - {id: O2.1, title: Fast Start, text: It starts at once., measure: seconds}
+  - {id: O3, title: Cheap, text: It costs little., measure: cost}
+`,
+	})
+	for id, want := range map[string]int{"O1": 2, "O2": 1, "O2.1": 0, "O3": 0} {
+		if got := item(t, root, id).Rank; got != want {
+			t.Errorf("%s has rank %d, want %d", id, got, want)
+		}
+	}
+}

@@ -11,13 +11,10 @@ items:
     title: The Format Is Enforced
     text: The checker SHALL report each breach of the format that a set's files show, as a warning
       where the format names it one and as an error otherwise.
-    rationale: The format document is the one place the rules live, so the checker answers to it
-      rather than to a copy of its rules here.
+    rationale: The format [T63] is the one place the rules live, so the checker answers to it
+      rather than to a copy of its rules as requirements.
     serves: [N55.1, N56.1]
-    status: approved
-    notes:
-      - The rules within one set are implemented; the rules that read another set, such as
-        mirrors and name/id references, are not.
+    status: implemented
     children:
       - id: R2.1
         title: Unknown Formats Are Refused
@@ -39,6 +36,24 @@ items:
           naming that set.
         rationale: A rule left unchecked must not pass for a rule that holds.
         status: implemented
+      - id: R2.4
+        title: Sets Of The Same Repository Read
+        text: When a set depends on a set of its own repository, the checker SHALL read that set as
+          it stands beside it, and hold the mirrors of the set and its references to it against
+          it.
+        rationale: The mirror rules [T63.6] need the set depended on, and one in the same repository
+          reads at the same revision, with nothing to fetch.
+        serves: [N56.2, N52.3]
+        status: implemented
+      - id: R2.5
+        title: Sets Of Other Repositories Read
+        text: When a set depends on a set of another repository, the checker SHALL read that set at
+          the revision its rev names, and hold the mirrors of the set and its references to it
+          against it.
+        rationale: A standard kept in a repository of its own is then maintained once, and each
+          product reads it at the version it pins [T71.4].
+        serves: [N56.2, N52.3]
+        status: approved
   - id: R3
     title: Findings Locate Themselves
     text: The checker SHALL report each finding with the file, line, id and field it concerns.

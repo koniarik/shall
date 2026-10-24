@@ -41,22 +41,26 @@ func TestParseReportsTheErrorLine(t *testing.T) {
 }
 
 func TestDuplicateKeysAreErrors(t *testing.T) {
+	t.Attr("verifies", "R2")
 	if e := mustFail(t, "a: 1\na: 2\n"); e.Line != 2 {
 		t.Fatalf("error line = %d, want 2", e.Line)
 	}
 }
 
 func TestRefusesAliases(t *testing.T) {
+	t.Attr("verifies", "R2")
 	mustFail(t, "a: &x 1\nb: *x\n")
 }
 
 func TestRefusesTags(t *testing.T) {
+	t.Attr("verifies", "R2")
 	if e := mustFail(t, "a: 1\nformat: !!str 1\n"); e.Line != 2 {
 		t.Fatalf("error line = %d, want 2", e.Line)
 	}
 }
 
 func TestRefusesASecondDocument(t *testing.T) {
+	t.Attr("verifies", "R2")
 	if e := mustFail(t, "mission: first\n---\nmission: second\n"); e.Line != 2 {
 		t.Fatalf("error line = %d, want 2", e.Line)
 	}

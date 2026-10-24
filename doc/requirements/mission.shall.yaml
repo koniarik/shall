@@ -1,14 +1,134 @@
 ---
-title: Why shall Exists
-mission: shall keeps a product's mission, needs and requirements as reviewed text in git, so that
+title: Why The shall Tool Exists
+mission: The shall tool keeps a product's mission, needs and requirements as reviewed text in git, so that
   people and agents can check them, browse them and discuss changes to them in one place.
 
 ranking: [O45, O46, O47, O48, O49, O50, O51]
 items:
+  - id: T71
+    title: The Concept
+    text: |
+      The shall tool keeps a product's requirements the way code is kept: as text
+      in the product's own git repository, changed through reviewed commits,
+      checked by a machine on every commit, and read as one document. This set is
+      the tool's own requirements, written in the format they specify [T63]; the
+      topics below give the idea everything after them builds on.
+    children:
+      - id: T71.1
+        title: From Mission To Promise
+        text: |
+          A set starts from why the product exists and works down to what it
+          promises:
+
+          - The **mission** is one statement of why the product exists.
+          - **Objectives** are the results it exists to achieve, each with a measure
+            that tells how far it is met. The **ranking** says which objective wins
+            when two conflict.
+          - **Stakeholder classes** are the roles whose interests the product serves.
+            Each holds the **needs** it has, in its own words, and a need serves the
+            objectives it advances.
+          - **Requirements** are the promises that answer the needs. Each states one
+            thing the product SHALL do, specific enough to check, and serves the needs
+            or requirements it exists for.
+          - **Topics** explain what a reader needs to know to follow the items around
+            them: the terms they use, the design they belong to. A topic promises
+            nothing.
+
+          Following what each item serves leads from any requirement up through needs
+          and objectives to the mission, so every promise says why it is there, and an
+          objective that nothing serves shows a gap.
+
+          ```dot
+          digraph concept {
+            rankdir=BT
+            node [shape=box]
+            mission [label="mission"]
+            objective [label="objectives, ranked"]
+            need [label="needs of\nstakeholder classes"]
+            requirement [label="requirements"]
+            topic [label="topics", shape=note]
+            objective -> mission [label="serve"]
+            need -> objective [label="serve"]
+            requirement -> need [label="serve"]
+            requirement -> requirement [label="refine"]
+            topic -> requirement [label="explain", style=dashed]
+          }
+          ```
+      - id: T71.2
+        title: How Far A Promise Has Got
+        text: |
+          A requirement's status says where its promise stands: written as a
+          `draft`, `approved` as a promise the product will keep, `implemented`, and
+          `verified` by its stated method, which is a test, an inspection, an analysis
+          or a demonstration [T63.10]. A requirement refined by finer ones stands only
+          as far as the least advanced of them, which is its effective status.
+
+          A need stays a `hypothesis` until real use confirms it and it is
+          `validated`; a need found wrong is retired.
+
+          A requirement that does not apply to the product is **waived**: it stays in
+          the set, with a rationale that says why, so that a reader sees a decision
+          rather than a gap. Nothing below a waived requirement needs a status of its
+          own. This set waives the baseline's promises that a command-line tool cannot
+          keep [T70].
+      - id: T71.3
+        title: Ids And History
+        text: |
+          Every item has an id: a letter for its kind and a number for its place in
+          the tree [T63.3]. Items name each other by id, and so do reviews, tests and
+          tickets, so an id stays with its statement for good. An item no longer wanted
+          is retired, and its id is never used again [T63.4]; git keeps every earlier
+          version of every file.
+      - id: T71.4
+        title: Building On Shared Sets
+        text: |
+          Promises every product of a company or a department makes, such as the
+          baseline's, belong in a set of their own: a standard. A product's set
+          depends on the standard, pinned to a version of it, and mirrors each of its
+          items: it says, in the product's own terms, what the item means for that
+          product [T63.6]. A requirement of the standard that does not apply to the
+          product is mirrored as waived, with the reason.
+
+          The standard is then maintained once, every product's set shows how it meets
+          each of its promises, and moving a product to a newer version of the
+          standard can show which mirrors to revisit [N52.2]. This set depends on no
+          other; its baseline is a chapter of its own [T70].
+      - id: T71.5
+        title: How A Set Is Worked On
+        text: |
+          - Authors write and restructure a set in their editor, beside the code it
+            specifies, and commit it with the code.
+          - `shall check` holds the set to its format on every commit, as a pre-commit
+            hook, and in CI [T64].
+          - Reviewers judge a change statement by statement, with what it does to
+            statuses and findings, using `shall diff` [T65].
+          - Anyone reads the set as one document, every id a link, with `shall serve`
+            or a published copy [T66], [T68].
+          - Scripts and agents read and check the same set through JSON, from the
+            API or as one document from `shall dump` [T67].
+
+          Everything the tool knows is in the repository's files [O48]; it keeps no
+          other store.
+      - id: T71.6
+        title: How This Set Reads
+        text: |
+          This file comes first: the mission, these topics, the objectives in ranked
+          order, and the stakeholder classes with their needs. The chapters follow:
+
+          - Format 1, the format every set is written in [T63];
+          - Baseline, the promises every product keeps, as this one keeps them [T70];
+          - Command Line, the tool's commands, how they exit, and how to install it
+            [T64];
+          - Check, Diff and Serve, one for each thing the tool does: holding a set
+            to its format [R2], comparing it between two refs [T65], and showing it
+            as a document [T66];
+          - Design, how the tool is built and why [T69].
+
+          In each chapter, topics come before the requirements that use their terms.
   - id: O45
     title: Machine-Checked
-    text: Every rule the format states, including which links are required, is enforced by shall
-      itself.
+    text: Every rule the format states, including which links are required, is enforced by the
+      tool itself.
     measure: rules the format states that the checker does not enforce; errors that fail to name
       the file, id and field at fault.
   - id: O46
@@ -25,9 +145,9 @@ items:
       judge without reading YAML.
   - id: O48
     title: Git Is The Only Store
-    text: Everything shall knows lives in the repository's files and in the hosting service's
+    text: Everything the tool knows lives in the repository's files and in the hosting service's
       review threads.
-    measure: state shall keeps anywhere else; commits shall makes on its own.
+    measure: state the tool keeps anywhere else; commits it makes on its own.
   - id: O49
     title: Scriptable
     text: Every query, check, diff and edit the interface offers is available from the command
@@ -43,8 +163,8 @@ items:
     title: Composable
     text: A product's requirements build on shared sets, each a repository or a path in one,
       pinned to a version.
-    measure: items affected by an upstream upgrade that shall does not flag; upstream items a
-      product does not mirror.
+    measure: items affected by upgrading a set depended on that the tool does not flag; items of a
+      set depended on that a product does not mirror.
 
   - id: S52
     title: Author
@@ -57,12 +177,13 @@ items:
         status: hypothesis
       - id: N52.2
         title: Upgrade Impact
-        text: Upgrade an upstream set and see exactly which of their items it affects.
+        text: When I move my product to a newer version of a standard it builds on, see exactly
+          which of my items the change touches.
         serves: [O51, O47]
         status: hypothesis
       - id: N52.3
         title: Visible Waivers
-        text: Waive an upstream requirement with a reason that reviewers see.
+        text: Waive a requirement of a set mine depends on, with a reason that reviewers see.
         serves: [O51, O45]
         status: hypothesis
       - id: N52.4
@@ -72,7 +193,8 @@ items:
         status: hypothesis
       - id: N52.5
         title: See It As I Write
-        text: See what I write as readers will see it, while I write it.
+        text: Keep the document open beside my editor and see each file I save there within
+          moments, as readers will see it and with what the checker finds in it.
         serves: [O46]
         status: hypothesis
 
@@ -121,7 +243,7 @@ items:
         status: hypothesis
   - id: S56
     title: Department Manager
-    text: Wants the same structure and comparable reports across every project.
+    text: Oversees several products and the people who write their requirements.
     children:
       - id: N56.1
         title: Same Structure Everywhere
@@ -148,4 +270,20 @@ items:
         text: Contributors and agents can read and change the code without first learning a house
           style.
         serves: [mission]
+        status: hypothesis
+  - id: S62
+    title: Tool Approver
+    text: Decides which tools may run on the department's machines and in its CI.
+    children:
+      - id: N62.1
+        title: Nothing Beyond The Machine
+        text: Know that a tool keeps nothing outside the repository, changes nothing it was not
+          asked to, and reaches beyond the machine only where its files say so.
+        serves: [O48]
+        status: hypothesis
+      - id: N62.2
+        title: Known Origins
+        text: Know where every part of a tool comes from, at which version and under which licence,
+          before approving it.
+        serves: [O50]
         status: hypothesis

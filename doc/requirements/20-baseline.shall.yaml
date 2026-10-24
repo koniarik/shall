@@ -1,10 +1,20 @@
 ---
 title: Baseline
 items:
+  - id: T70
+    title: What Every Product Promises
+    text: |
+      The baseline holds the promises every product keeps, whatever it does: safe input, loud
+      errors, bounded resources, versioned data, no secrets in the clear, an accessible
+      interface and a known supply chain. Each links the standard it draws on.
+
+      The shall tool keeps them for itself too. A promise that cannot apply to a command-line tool and
+      a server for one reader is waived, and says why.
   - id: R7
     title: Secure By Default
     text: When input arrives over the network, the product SHALL validate it before anything acts
       on it.
+    serves: [N62.1]
     status: approved
     links:
       - url: https://owasp.org/www-project-application-security-verification-standard/
@@ -13,20 +23,25 @@ items:
     title: Least Privilege
     text: If no right granted to a request's actor allows the request, then the product SHALL
       refuse it.
-    status: approved
+    rationale: The tool grants no rights. Its server answers whoever can reach it, which is this
+      machine alone unless told otherwise [R25.2], and it only reads [R36.3].
+    status: waived
     links:
       - url: https://owasp.org/www-project-application-security-verification-standard/
         title: OWASP Application Security Verification Standard
   - id: R9
     title: Attributed Changes
     text: When its state changes, the product SHALL record who changed it, what changed and when.
-    status: approved
+    rationale: The tool keeps no state of its own. A set changes only in its files, and git records
+      who changed them, what and when [O48].
+    status: waived
     links:
       - url: https://www.iso.org/standard/78176.html
         title: ISO/IEC 25010 product quality model, accountability
   - id: R10
     title: Fail Loud
     text: If an error occurs, then the product SHALL report and record it where it happens.
+    serves: [N55.1, N52.5]
     status: approved
     links:
       - url: https://www.martinfowler.com/ieeeSoftware/failFast.pdf
@@ -40,7 +55,9 @@ items:
     title: Observable
     text: The product SHALL expose the health of each of its components, and the logs and metrics
       needed to diagnose it without attaching a debugger.
-    status: approved
+    rationale: The tool runs as one command, or as a server for one reader, with no components that
+      run on their own to watch; what goes wrong is reported where it happens [R10].
+    status: waived
     links:
       - url: https://sre.google/sre-book/monitoring-distributed-systems/
         title: Google SRE, Monitoring Distributed Systems
@@ -48,6 +65,7 @@ items:
     title: Bounded Resources
     text: If memory, disk or a queue reaches its limit, then the product SHALL report it instead of
       crashing or growing without end.
+    serves: [N62.1]
     status: approved
     links:
       - url: https://www.iso.org/standard/78176.html
@@ -56,13 +74,16 @@ items:
     title: Durable
     text: If a process crashes or restarts, then the product SHALL NOT lose anything it has
       acknowledged.
-    status: approved
+    rationale: The tool acknowledges nothing it could lose. It keeps nothing from one run to the
+      next, and an export writes only into an empty directory [R60.3].
+    status: waived
     links:
       - url: https://www.iso.org/standard/78176.html
         title: ISO/IEC 25010 product quality model, recoverability
   - id: R14
     title: Upgradable
     text: The product SHALL mark its stored data and every wire format with a version.
+    serves: [N57.1, N55.1]
     status: approved
     links:
       - url: https://www.iso.org/standard/78176.html
@@ -75,14 +96,19 @@ items:
   - id: R15
     title: No Secrets In The Clear
     text: The product SHALL NOT write a secret into a log, the repository or an error message.
+    rationale: A dependency's git address can carry a token.
+    serves: [N62.1]
     verify: inspection
-    status: approved
+    status: implemented
     links:
       - url: https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html
         title: OWASP Secrets Management Cheat Sheet
   - id: R16
     title: Explicit Retention
     text: The product SHALL NOT delete anything unless a declared policy says so.
+    rationale: Anything here is what someone else made or keeps; the product's own temporary
+      files, made and removed within one run, are not meant.
+    serves: [N62.1]
     status: approved
     links:
       - url: https://gdpr-info.eu/art-5-gdpr/
@@ -91,10 +117,12 @@ items:
       - id: R16.1
         title: Deletions Are Recorded
         text: When a policy deletes something, the product SHALL record what it deleted.
-        status: approved
+        rationale: The tool has no policy that deletes anything.
+        status: waived
   - id: R17
     title: Accessible Interface
     text: Where the product has a user interface, the product SHALL meet WCAG 2.2 level AA.
+    serves: [N53.3]
     verify: inspection
     status: approved
     links:
@@ -103,6 +131,7 @@ items:
   - id: R18
     title: Known Supply Chain
     text: The product SHALL pin every dependency to a version.
+    serves: [N62.2]
     verify: inspection
     status: implemented
     links:
@@ -113,3 +142,6 @@ items:
         title: Known Licences
         text: The product SHALL record the licence of every dependency.
         status: implemented
+        links:
+          - url: https://github.com/koniarik/shall/blob/main/doc/licences.md
+            title: The licences of shall's dependencies

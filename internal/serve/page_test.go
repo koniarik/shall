@@ -375,6 +375,32 @@ func TestPageStatusesShown(t *testing.T) {
 	}
 }
 
+func TestPageKindsNamed(t *testing.T) {
+	t.Attr("verifies", "R26.18")
+	g := openPage(t, pageSet(), "/demo/R1")
+	for id, want := range map[string]string{"O61": "objective", "S65": "stakeholder class", "N65.1": "need", "R1": "requirement"} {
+		if got := g.str(fmt.Sprintf(`document.querySelector('[id=%q] > .head .kind')?.textContent`, id)); got != want {
+			t.Errorf("%s is shown as a %q, want %q", id, got, want)
+		}
+	}
+}
+
+func TestPageRankingShown(t *testing.T) {
+	t.Attr("verifies", "R26.19")
+	g := openPage(t, map[string]string{
+		"shall.yaml": "name: demo\nformat: 1\n",
+		"mission.shall.yaml": "title: M\nmission: m\nranking: [O2, O1]\nitems:\n" +
+			"  - {id: O1, title: Safe, text: Nothing breaks., measure: incidents}\n" +
+			"  - {id: O2, title: Fast, text: Nothing waits., measure: waits}\n" +
+			"  - {id: O3, title: Cheap, text: It costs little., measure: cost}\n",
+	}, "/demo/")
+	for id, want := range map[string]string{"O1": "ranked 2 of 2", "O2": "ranked 1 of 2", "O3": ""} {
+		if got := g.str(fmt.Sprintf(`document.querySelector('[id=%q] > .head .rank')?.textContent ?? ''`, id)); got != want {
+			t.Errorf("%s shows %q, want %q", id, got, want)
+		}
+	}
+}
+
 func TestPageFollowsALinkIntoAFoldedChapter(t *testing.T) {
 	t.Attr("verifies", "R26.6")
 	t.Attr("verifies", "R27.3")
@@ -851,9 +877,9 @@ func TestPageTopics(t *testing.T) {
 			"      - {id: T3.2, title: Levels, children: [{id: R3.2.1, title: Low, text: The machine SHALL warn., serves: [N2.1], status: verified}]}\n",
 	}
 	g := openPage(t, set, "/demo/T3")
-	g.expect(`!!document.querySelector('#outline-menu a[data-item="T3"] + ul a[data-item="T3.2"]')`, "the outline lists a topic's topics under it")
-	if g.is(`document.querySelector('#outline-menu a[data-item="R3.1"]')`) {
-		t.Error("the outline lists a requirement under a topic, want only the topics there")
+	g.expect(`!!document.querySelector('#outline-menu a[data-item="T3"]')`, "the outline lists a top-level topic")
+	if g.is(`document.querySelector('#outline-menu a[data-item="T3.2"], #outline-menu a[data-item="R3.1"]')`) {
+		t.Error("the outline lists a child of a topic, want only top-level items")
 	}
 	topic := `document.getElementById('T3')`
 	if got, want := g.str(topic+`.querySelector(':scope > .head .counts')?.textContent`), "2 requirements · 1 draft · 1 verified"; got != want {

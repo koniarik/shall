@@ -201,3 +201,43 @@ func TestSetsComeApart(t *testing.T) {
 		t.Errorf("a set whose manifest is no YAML = %+v, want no name, set or tree, and one finding", c)
 	}
 }
+
+func TestASetOfTheSameRepositoryIsRead(t *testing.T) {
+	t.Attr("verifies", "R2.3")
+	t.Attr("verifies", "R2.4")
+	root := testfile.Write(t, map[string]string{
+		".git/HEAD":              "",
+		"std/shall.yaml":         "name: standard\nformat: 1\n",
+		"std/mission.shall.yaml": mission,
+		"std/c.shall.yaml":       "title: C\nitems:\n  - {id: R1, title: Logged, text: The product SHALL log., serves: [N9.1], status: approved}\n",
+		"product/shall.yaml": "name: p\nformat: 1\ndepends:\n  company: {path: std}\n  team: {path: nowhere}\n" +
+			"  other: {git: \"https://example.com/other\", rev: v1}\n",
+		"product/mission.shall.yaml": `title: M
+mission: m
+items:
+  - id: S9
+    title: A
+    text: t
+    mirrors: company/S9
+    children:
+      - {id: N9.1, title: A, text: t, serves: [mission], status: hypothesis, mirrors: company/N9.1}
+`,
+	})
+	for _, dir := range []string{root, filepath.Join(root, "product")} {
+		got := run(t, dir)
+		at := "product/shall.yaml"
+		if dir != root {
+			at = "shall.yaml"
+		}
+		// The set depended on is read, from beside the product or from
+		// outside the directory checked, and its R1 has no mirror.
+		expect(t, got, at, "company/R1 Logged has no mirror in this set")
+		expect(t, got, at, `set "team" cannot be read, and the mirror rules need it: there is no shall.yaml at nowhere`)
+		expect(t, got, at, `set "other" cannot be read, and the mirror rules need it: it is in another repository`)
+		for _, f := range got {
+			if strings.Contains(f.Message, `"company" cannot be read`) || f.ID == "S9" || f.ID == "N9.1" {
+				t.Errorf("checking %s: finding %+v, want none: the set it depends on is read and mirrored", dir, f)
+			}
+		}
+	}
+}

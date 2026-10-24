@@ -77,9 +77,10 @@ func TestFindsEverySetUnderTheDirectory(t *testing.T) {
 
 func TestNoSetIsAnError(t *testing.T) {
 	t.Attr("verifies", "R1")
+	t.Attr("verifies", "R64.1")
 	code, out := shall(t, "check", testfile.Write(t, map[string]string{"x.txt": ""}))
-	if code != 1 || !strings.Contains(out, "no shall.yaml") {
-		t.Fatalf("exit %d, output %q; want 1 and that there is no shall.yaml", code, out)
+	if code != 2 || !strings.Contains(out, "no shall.yaml") {
+		t.Fatalf("exit %d, output %q; want 2 and that there is no shall.yaml", code, out)
 	}
 }
 
@@ -169,13 +170,11 @@ func TestWarningsFailOnlyWhenAsked(t *testing.T) {
 	}
 }
 
-func TestShallsOwnSetHasNoErrors(t *testing.T) {
+func TestShallsOwnSetIsClean(t *testing.T) {
 	t.Attr("verifies", "R2")
 	code, r := jsonReport(t, "../..")
 	for _, f := range r.Findings {
-		if f.Severity == "error" {
-			t.Errorf("%s:%d %s %s: %s", f.File, f.Line, f.ID, f.Field, f.Message)
-		}
+		t.Errorf("%s:%d %s %s: %s %s", f.File, f.Line, f.ID, f.Field, f.Severity, f.Message)
 	}
 	if code != 0 {
 		t.Fatalf("exit %d, want 0", code)
@@ -183,6 +182,7 @@ func TestShallsOwnSetHasNoErrors(t *testing.T) {
 }
 
 func TestUsage(t *testing.T) {
+	t.Attr("verifies", "R64.1")
 	if code, _ := shall(t); code != 2 {
 		t.Fatalf("exit %d without a command, want 2", code)
 	}
@@ -242,24 +242,62 @@ func TestServeSaysWhereItServes(t *testing.T) {
 
 func TestServeIsLocalByDefault(t *testing.T) {
 	t.Attr("verifies", "R25.2")
+	t.Attr("verifies", "R25.2.2")
 	host, _, err := net.SplitHostPort(serve.DefaultAddr)
 	if ip := net.ParseIP(host); err != nil || ip == nil || !ip.IsLoopback() {
 		t.Errorf("default address %s is not on this machine only", serve.DefaultAddr)
 	}
+	if serve.DefaultAddr != "127.0.0.1:7180" {
+		t.Errorf("default address %s, want 127.0.0.1:7180", serve.DefaultAddr)
+	}
 }
 
 func TestServeRefusesATakenAddress(t *testing.T) {
+	t.Attr("verifies", "R64.1")
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer ln.Close()
-	if code, out := shall(t, "serve", "-addr", ln.Addr().String(), t.TempDir()); code != 1 || !strings.Contains(out, "shall:") {
-		t.Errorf("exit %d %q, want 1 with the reason", code, out)
+	if code, out := shall(t, "serve", "-addr", ln.Addr().String(), t.TempDir()); code != 2 || !strings.Contains(out, "shall:") {
+		t.Errorf("exit %d %q, want 2 with the reason", code, out)
+	}
+}
+
+func TestEveryCommandThatCannotRunExitsWithStatus2(t *testing.T) {
+	t.Attr("verifies", "R64.1")
+	set := testfile.Write(t, map[string]string{"shall.yaml": manifest, "mission.shall.yaml": mission})
+	empty := t.TempDir()
+	nowhere := filepath.Join(empty, "nowhere")
+	for _, c := range []struct {
+		args []string
+		why  string
+	}{
+		{[]string{"nonsense"}, `no command "nonsense"`},
+		{[]string{"check", filepath.Join(set, "shall.yaml")}, "is not a directory"},
+		{[]string{"check", set, "-json"}, "after its flags"},
+		{[]string{"check", nowhere}, "no such file"},
+		{[]string{"diff", nowhere}, "no such file"},
+		{[]string{"export", "-out", filepath.Join(t.TempDir(), "site"), nowhere}, "no such file"},
+		{[]string{"export", "-out", filepath.Join(t.TempDir(), "site"), empty}, "no shall.yaml"},
+		{[]string{"serve", nowhere}, "no such file"},
+		{[]string{"serve", "-addr", "nonsense", set}, "missing port"},
+		{[]string{"dump", nowhere}, "no such file"},
+		{[]string{"dump", empty}, "no shall.yaml"},
+	} {
+		// A server that wrongly starts stops when the time is up.
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		var out, errs bytes.Buffer
+		code := run(ctx, c.args, &out, &errs)
+		cancel()
+		if code != 2 || !strings.Contains(errs.String(), c.why) {
+			t.Errorf("shall %v = exit %d %q, want 2 saying %q", c.args, code, errs.String(), c.why)
+		}
 	}
 }
 
 func TestWrongUseIsRefused(t *testing.T) {
+	t.Attr("verifies", "R64.1")
 	dir := t.TempDir()
 	for _, args := range [][]string{
 		{"nonsense"},
@@ -299,7 +337,33 @@ func TestExportWritesACopy(t *testing.T) {
 	}
 }
 
+func TestDumpPrintsEverySetAsOneDocument(t *testing.T) {
+	t.Attr("verifies", "R74")
+	dir := testfile.Write(t, map[string]string{"shall.yaml": manifest, "mission.shall.yaml": mission})
+	var out, errs bytes.Buffer
+	if code := run(t.Context(), []string{"dump", dir}, &out, &errs); code != 0 || errs.Len() != 0 {
+		t.Fatalf("exit %d %q, want 0 and nothing said", code, errs.String())
+	}
+	var dump struct {
+		Sets []struct {
+			Name  string `json:"name"`
+			Files []struct {
+				Items []struct {
+					ID string `json:"id"`
+				} `json:"items"`
+			} `json:"files"`
+		} `json:"sets"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &dump); err != nil {
+		t.Fatalf("the dump is no JSON: %v\n%s", err, out.String())
+	}
+	if len(dump.Sets) != 1 || dump.Sets[0].Name != "x" || len(dump.Sets[0].Files) != 1 || len(dump.Sets[0].Files[0].Items) != 1 {
+		t.Errorf("dump = %+v, want set x with its mission file and S9 in it", dump)
+	}
+}
+
 func TestCheckingADirectoryThatIsNotThere(t *testing.T) {
+	t.Attr("verifies", "R64.1")
 	if code, out := shall(t, "check", filepath.Join(t.TempDir(), "nowhere")); code != 2 || !strings.Contains(out, "shall:") {
 		t.Errorf("exit %d %q, want 2 with the reason", code, out)
 	}

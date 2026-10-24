@@ -18,7 +18,8 @@ func TestTheSourceIsFormattedAsGofmtFormatsIt(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() && strings.HasPrefix(d.Name(), ".") && path != "." {
+		// third_party holds other projects' code, as they wrote it.
+		if d.IsDir() && (strings.HasPrefix(d.Name(), ".") && path != "." || path == "third_party") {
 			return filepath.SkipDir
 		}
 		if d.IsDir() || !strings.HasSuffix(path, ".go") {
